@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "question": "HTML nima?",
+    "answers": ["Til", "Protokol", "Kod", "Ma'lumot ombori"],
+    "correct": 0,
+    "categoryId": 1,
+    "groupId": 1
+  },
+  {
+    "id": 2,
+    "question": "Kompyuterning asosiy qurilmasi?",
+    "answers": ["Monitor", "Sichqoncha", "Sistem blok", "Printer"],
+    "correct": 2,
+    "categoryId": 1,
+    "groupId": 1
+  }
+]

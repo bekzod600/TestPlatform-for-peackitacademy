@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "fullName": "Admin User",
+    "username": "admin",
+    "password": "admin123",
+    "role": "admin",
+    "assignedUserGroup": null
+  },
+  {
+    "id": 2,
+    "fullName": "Student Test",
+    "username": "student",
+    "password": "1234",
+    "role": "student",
+    "assignedUserGroup": 1
+  }
+]
