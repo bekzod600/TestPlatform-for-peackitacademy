@@ -4,7 +4,7 @@
       <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
         <h1 class="text-xl font-bold text-gray-800">Test Platformasi</h1>
         <div class="flex items-center gap-4">
-          <span class="text-gray-600">{{ currentUser?.fullName }}</span>
+          <span class="text-gray-600">{{ currentUser?.full_name }}</span>
           <button
             @click="goHome"
             class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition"

@@ -1,18 +1,18 @@
 [
   {
     "id": 1,
-    "fullName": "Admin User",
+    "full_name": "Admin User",
     "username": "admin",
     "password": "admin123",
     "role": "admin",
-    "assignedUserGroup": null
+    "assigned_user_group": null
   },
   {
     "id": 2,
-    "fullName": "Student Test",
+    "full_name": "Student Test",
     "username": "student",
     "password": "1234",
     "role": "student",
-    "assignedUserGroup": 1
+    "assigned_user_group": 1
   }
 ]

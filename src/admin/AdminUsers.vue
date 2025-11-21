@@ -22,7 +22,7 @@
               To'liq ism
             </label>
             <input
-              v-model="form.fullName"
+              v-model="form.full_name"
               type="text"
               required
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
@@ -76,7 +76,7 @@
           <label class="block text-sm font-medium text-gray-700 mb-2">
             Guruhi
           </label>
-          <UserGroupSelect v-model="form.assignedUserGroup" :groups="userGroups" />
+          <UserGroupSelect v-model="form.assigned_user_group" :groups="userGroups" />
         </div>
 
         <div class="flex gap-2">
@@ -121,7 +121,7 @@
         <tbody>
           <tr v-for="user in users" :key="user.id" class="border-t border-gray-200 hover:bg-gray-50">
             <td class="px-6 py-3 text-gray-700">
-              {{ user.fullName }}
+              {{ user.full_name }}
             </td>
             <td class="px-6 py-3 text-gray-700">
               {{ user.username }}
@@ -138,7 +138,7 @@
               </span>
             </td>
             <td class="px-6 py-3 text-gray-600">
-              {{ getUserGroupName(user.assignedUserGroup) }}
+              {{ getUserGroupName(user.assigned_user_group) }}
             </td>
             <td class="px-6 py-3 text-center space-x-2">
               <button
@@ -174,11 +174,11 @@ const showForm = ref(false)
 const editingId = ref(null)
 
 const form = ref({
-  fullName: '',
+  full_name: '',
   username: '',
   password: '',
   role: 'student',
-  assignedUserGroup: null
+  assigned_user_group: null
 })
 
 onMounted(async () => {
@@ -194,32 +194,32 @@ const getUserGroupName = (id) => {
 }
 
 const saveUser = async () => {
-  if (!form.value.fullName || !form.value.username || !form.value.password) {
+  if (!form.value.full_name || !form.value.username || !form.value.password) {
     alert('Barcha maydonlarni to\'ldiring!')
     return
   }
 
-  if (form.value.role === 'student' && !form.value.assignedUserGroup) {
+  if (form.value.role === 'student' && !form.value.assigned_user_group) {
     alert('O\'quvchi uchun guruh tanlang!')
     return
   }
 
   if (editingId.value) {
     await usersStore.editUser(editingId.value, {
-      fullName: form.value.fullName,
+      full_name: form.value.full_name,
       username: form.value.username,
       password: form.value.password,
       role: form.value.role,
-      assignedUserGroup: form.value.role === 'admin' ? null : form.value.assignedUserGroup
+      assigned_user_group: form.value.assigned_user_group
     })
     alert('Foydalanuvchi tahrirlandi')
   } else {
     await usersStore.addUser({
-      fullName: form.value.fullName,
+      full_name: form.value.full_name,
       username: form.value.username,
       password: form.value.password,
       role: form.value.role,
-      assignedUserGroup: form.value.role === 'admin' ? null : form.value.assignedUserGroup
+      assigned_user_group: form.value.assigned_user_group
     })
     alert('Foydalanuvchi qo\'shildi')
   }
@@ -231,11 +231,11 @@ const saveUser = async () => {
 const editUser = (user) => {
   editingId.value = user.id
   form.value = {
-    fullName: user.fullName,
+    full_name: user.full_name,
     username: user.username,
     password: user.password,
     role: user.role,
-    assignedUserGroup: user.assignedUserGroup
+    assigned_user_group: user.assigned_user_group
   }
   showForm.value = true
 }
@@ -251,11 +251,11 @@ const deleteUser = async (id) => {
 const resetForm = () => {
   editingId.value = null
   form.value = {
-    fullName: '',
+    full_name: '',
     username: '',
     password: '',
     role: 'student',
-    assignedUserGroup: null
+    assigned_user_group: null
   }
   showForm.value = false
 }

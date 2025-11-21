@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { supabase } from '../lib/supabase'
 
 export const useUsersStore = defineStore('users', () => {
   const currentUser = ref(null)
@@ -8,9 +9,13 @@ export const useUsersStore = defineStore('users', () => {
 
   const loadUsers = async () => {
     try {
-      const response = await fetch('/users.json')
-      const data = await response.json()
-      users.value = data
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('id', { ascending: true })
+      
+      if (error) throw error
+      users.value = data || []
       return data
     } catch (error) {
       console.error('Error loading users:', error)
@@ -20,9 +25,13 @@ export const useUsersStore = defineStore('users', () => {
 
   const loadUserGroups = async () => {
     try {
-      const response = await fetch('/user_groups.json')
-      const data = await response.json()
-      userGroups.value = data
+      const { data, error } = await supabase
+        .from('user_groups')
+        .select('*')
+        .order('id', { ascending: true })
+      
+      if (error) throw error
+      userGroups.value = data || []
       return data
     } catch (error) {
       console.error('Error loading user groups:', error)
@@ -32,18 +41,18 @@ export const useUsersStore = defineStore('users', () => {
 
   const login = async (username, password) => {
     try {
-      const data = await loadUsers()
-      const user = data.find(
-        u => u.username === username && u.password === password
-      )
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .eq('password', password)
+        .single()
 
-      if (user) {
-        currentUser.value = user
-        localStorage.setItem('currentUser', JSON.stringify(user))
-        return user
-      }
+      if (error || !data) return null
 
-      return null
+      currentUser.value = data
+      localStorage.setItem('currentUser', JSON.stringify(data))
+      return data
     } catch (error) {
       console.error('Login error:', error)
       return null
@@ -64,14 +73,16 @@ export const useUsersStore = defineStore('users', () => {
 
   const addUser = async (newUser) => {
     try {
-      const maxId = users.value.length > 0 ? Math.max(...users.value.map(u => u.id)) : 0
-      const userToAdd = {
-        id: maxId + 1,
-        ...newUser
-      }
-      users.value.push(userToAdd)
-      await saveUsers()
-      return userToAdd
+      const { data, error } = await supabase
+        .from('users')
+        .insert([newUser])
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      users.value.push(data)
+      return data
     } catch (error) {
       console.error('Error adding user:', error)
       return null
@@ -80,13 +91,27 @@ export const useUsersStore = defineStore('users', () => {
 
   const editUser = async (id, updatedUser) => {
     try {
+      const { data, error } = await supabase
+        .from('users')
+        .update(updatedUser)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+
       const index = users.value.findIndex(u => u.id === id)
       if (index !== -1) {
-        users.value[index] = { ...users.value[index], ...updatedUser }
-        await saveUsers()
-        return users.value[index]
+        users.value[index] = data
       }
-      return null
+
+      // Agar joriy foydalanuvchini tahrirlayotgan bo'lsak
+      if (currentUser.value && currentUser.value.id === id) {
+        currentUser.value = data
+        localStorage.setItem('currentUser', JSON.stringify(data))
+      }
+
+      return data
     } catch (error) {
       console.error('Error editing user:', error)
       return null
@@ -95,22 +120,22 @@ export const useUsersStore = defineStore('users', () => {
 
   const deleteUser = async (id) => {
     try {
+      const { error } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
       const index = users.value.findIndex(u => u.id === id)
       if (index !== -1) {
         users.value.splice(index, 1)
-        await saveUsers()
-        return true
       }
-      return false
+      return true
     } catch (error) {
       console.error('Error deleting user:', error)
       return false
     }
-  }
-
-  const saveUsers = async () => {
-    console.log('Saving users:', users.value)
-    return true
   }
 
   return {
@@ -124,7 +149,6 @@ export const useUsersStore = defineStore('users', () => {
     loadUserFromStorage,
     addUser,
     editUser,
-    deleteUser,
-    saveUsers
+    deleteUser
   }
 })

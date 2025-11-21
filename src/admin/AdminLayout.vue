@@ -53,7 +53,7 @@
     <main class="flex-1">
       <div class="bg-white shadow-sm p-6 flex justify-between items-center">
         <h2 class="text-lg font-semibold text-gray-800">
-          Salom, {{ currentUser?.fullName }}!
+          Salom, {{ currentUser?.full_name }}!
         </h2>
       </div>
 

@@ -4,7 +4,7 @@
       <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
         <h1 class="text-xl font-bold text-gray-800">Test Platformasi</h1>
         <div class="flex items-center gap-4">
-          <span class="text-gray-600">{{ currentUser?.fullName }}</span>
+          <span class="text-gray-600">{{ currentUser?.full_name }}</span>
           <button
             @click="handleLogout"
             class="bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
@@ -18,7 +18,7 @@
     <div class="max-w-4xl mx-auto px-4 py-12">
       <div class="bg-white rounded-lg shadow-xl p-8">
         <h2 class="text-3xl font-bold text-gray-800 mb-4">
-          Xush kelibsiz, {{ currentUser?.fullName }}!
+          Xush kelibsiz, {{ currentUser?.full_name }}!
         </h2>
         <p class="text-gray-600 mb-2">
           Test topshirish yoki natijalarni ko'rish uchun quyidagi tugmalardan birini tanlang.
@@ -63,9 +63,9 @@ const currentUser = computed(() => usersStore.currentUser)
 const userGroupName = ref('')
 
 onMounted(async () => {
-  if (currentUser.value?.assignedUserGroup) {
+  if (currentUser.value?.assigned_user_group) {
     await usersStore.loadUserGroups()
-    const group = usersStore.userGroups.find(g => g.id === currentUser.value.assignedUserGroup)
+    const group = usersStore.userGroups.find(g => g.id === currentUser.value.assigned_user_group)
     userGroupName.value = group?.name || ''
   }
 })
@@ -77,7 +77,7 @@ const handleLogout = () => {
 
 const startTest = async () => {
   const questions = await questionsStore.loadQuestions()
-  const userGroupId = currentUser.value?.assignedUserGroup
+  const userGroupId = currentUser.value?.assigned_user_group
 
   let filteredQuestions = questions
   if (userGroupId) {
