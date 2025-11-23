@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
+  <div class="min-h-screen bg-linear-to-br from-blue-50 to-blue-100 flex items-center justify-center p-4">
     <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
       <h1 class="text-3xl font-bold text-gray-800 mb-6 text-center">Test Platformasi</h1>
 
@@ -45,7 +45,7 @@
       <div class="mt-6 text-sm text-gray-600">
         <p class="font-semibold mb-2">Test uchun:</p>
         <p>Admin: admin / admin123</p>
-        <p>Student: student / 1234</p>
+        <p>Student: student1 / 1234</p>
       </div>
     </div>
   </div>

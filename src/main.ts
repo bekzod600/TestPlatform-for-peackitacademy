@@ -8,6 +8,7 @@ import 'flowbite';
 
 const app = createApp(App)
 
+document.documentElement.classList.remove('dark');
 
 app.use(createPinia())
 app.use(router)

@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+  <div class="min-h-screen bg-linear-to-br from-blue-50 to-blue-100">
     <nav class="bg-white shadow-sm">
       <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
         <h1 class="text-xl font-bold text-gray-800">Test Platformasi</h1>
