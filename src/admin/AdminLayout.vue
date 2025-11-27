@@ -38,6 +38,28 @@
         >
           Savollar
         </router-link>
+
+        <router-link
+          to="/admin/assign-tests"
+          :class="{
+            'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/assign-tests',
+            'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/assign-tests'
+          }"
+          class="block px-6 py-3 font-medium transition"
+        >
+          Test biriktirish
+        </router-link>
+
+        <router-link
+          to="/admin/results"
+          :class="{
+            'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/results',
+            'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/results'
+          }"
+          class="block px-6 py-3 font-medium transition"
+        >
+          Test natijalari
+        </router-link>
       </nav>
 
       <div class="absolute bottom-0 left-0 w-64 p-6 border-t border-gray-200">

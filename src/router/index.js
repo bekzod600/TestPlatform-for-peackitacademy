@@ -8,6 +8,8 @@ import AdminLayout from '../admin/AdminLayout.vue'
 import AdminHome from '../admin/AdminHome.vue'
 import AdminUsers from '../admin/AdminUsers.vue'
 import AdminQuestions from '../admin/AdminQuestions.vue'
+import AdminAssignTests from '../admin/AdminAssignTests.vue'
+import AdminResults from '../admin/AdminResults.vue'
 
 const routes = [
   {
@@ -46,14 +48,22 @@ const routes = [
       {
         path: 'users',
         name: 'AdminUsers',
-        component: AdminUsers,
-        meta: { requiresAdmin: true }
+        component: AdminUsers
       },
       {
         path: 'questions',
         name: 'AdminQuestions',
-        component: AdminQuestions,
-        meta: { requiresAdmin: true }
+        component: AdminQuestions
+      },
+      {
+        path: 'assign-tests',
+        name: 'AdminAssignTests',
+        component: AdminAssignTests
+      },
+      {
+        path: 'results',
+        name: 'AdminResults',
+        component: AdminResults
       }
     ]
   }

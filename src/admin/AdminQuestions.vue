@@ -34,14 +34,14 @@
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Kategoriya
             </label>
-            <CategorySelect v-model="form.categoryId" :categories="categories" />
+            <CategorySelect v-model="form.category_id" :categories="categories" />
           </div>
 
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
               Savol guruhi
             </label>
-            <QuestionGroupSelect v-model="form.groupId" :groups="questionGroups" />
+            <QuestionGroupSelect v-model="form.group_id" :groups="questionGroups" />
           </div>
         </div>
 
@@ -118,10 +118,10 @@
               {{ question.question }}
             </td>
             <td class="px-6 py-3 text-gray-600">
-              {{ getCategoryName(question.categoryId) }}
+              {{ getCategoryName(question.category_id) }}
             </td>
             <td class="px-6 py-3 text-gray-600">
-              {{ getGroupName(question.groupId) }}
+              {{ getGroupName(question.group_id) }}
             </td>
             <td class="px-6 py-3 text-center space-x-2">
               <button
@@ -161,8 +161,8 @@ const form = ref({
   question: '',
   answers: ['', '', '', ''],
   correct: 0,
-  categoryId: null,
-  groupId: null
+  category_id: null,
+  group_id: null
 })
 
 onMounted(async () => {
@@ -183,7 +183,7 @@ const getGroupName = (id) => {
 }
 
 const saveQuestion = async () => {
-  if (!form.value.question || !form.value.categoryId || !form.value.groupId) {
+  if (!form.value.question || !form.value.category_id || !form.value.group_id) {
     alert('Barcha maydonlarni to\'ldiring!')
     return
   }
@@ -193,8 +193,8 @@ const saveQuestion = async () => {
       question: form.value.question,
       answers: form.value.answers,
       correct: +form.value.correct,
-      categoryId: +form.value.categoryId,
-      groupId: +form.value.groupId
+      category_id: +form.value.category_id,
+      group_id: +form.value.group_id
     })
     alert('Savol tahrirlandi')
   } else {
@@ -202,8 +202,8 @@ const saveQuestion = async () => {
       question: form.value.question,
       answers: form.value.answers,
       correct: +form.value.correct,
-      categoryId: +form.value.categoryId,
-      groupId: +form.value.groupId
+      category_id: +form.value.category_id,
+      group_id: +form.value.group_id
     })
     alert('Savol qo\'shildi')
   }
@@ -218,8 +218,8 @@ const editQuestion = (question) => {
     question: question.question,
     answers: [...question.answers],
     correct: question.correct,
-    categoryId: question.categoryId,
-    groupId: question.groupId
+    category_id: question.category_id,
+    group_id: question.group_id
   }
   showForm.value = true
 }
@@ -238,8 +238,8 @@ const resetForm = () => {
     question: '',
     answers: ['', '', '', ''],
     correct: 0,
-    categoryId: null,
-    groupId: null
+    category_id: null,
+    group_id: null
   }
   showForm.value = false
 }
