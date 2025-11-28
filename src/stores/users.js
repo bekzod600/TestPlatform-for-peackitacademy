@@ -39,6 +39,67 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  const addUserGroup = async (newGroup) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_groups')
+        .insert([newGroup])
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      userGroups.value.push(data)
+      return data
+    } catch (error) {
+      console.error('Error adding user group:', error)
+      return null
+    }
+  }
+
+  const editUserGroup = async (id, updatedGroup) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_groups')
+        .update(updatedGroup)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const index = userGroups.value.findIndex(g => g.id === id)
+      if (index !== -1) {
+        userGroups.value[index] = data
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error editing user group:', error)
+      return null
+    }
+  }
+
+  const deleteUserGroup = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('user_groups')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      const index = userGroups.value.findIndex(g => g.id === id)
+      if (index !== -1) {
+        userGroups.value.splice(index, 1)
+      }
+      return true
+    } catch (error) {
+      console.error('Error deleting user group:', error)
+      return false
+    }
+  }
+
   const login = async (username, password) => {
     try {
       const { data, error } = await supabase
@@ -138,7 +199,6 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
   
-// Guruhga test biriktirish va guruh ichidagi barcha studentlarga berish
   const assignTestToGroup = async (userGroupId, questionGroupId) => {
     try {
       // 1. User Group ga test biriktirish
@@ -184,7 +244,6 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
-  // Test natijasini saqlash va assigned_question_group ni null qilish
   const saveTestResult = async (userId, testResult) => {
     try {
       // Foydalanuvchini olish
@@ -232,6 +291,9 @@ export const useUsersStore = defineStore('users', () => {
     userGroups,
     loadUsers,
     loadUserGroups,
+    addUserGroup,
+    editUserGroup,
+    deleteUserGroup,
     login,
     logout,
     loadUserFromStorage,

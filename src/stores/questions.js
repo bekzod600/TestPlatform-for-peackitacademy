@@ -55,8 +55,69 @@ export const useQuestionsStore = defineStore('questions', () => {
     }
   }
 
+  const addQuestionGroup = async (newGroup) => {
+    try {
+      const { data, error } = await supabase
+        .from('question_groups')
+        .insert([newGroup])
+        .select()
+        .single()
+
+      if (error) throw error
+      
+      questionGroups.value.push(data)
+      return data
+    } catch (error) {
+      console.error('Error adding question group:', error)
+      return null
+    }
+  }
+
+  const editQuestionGroup = async (id, updatedGroup) => {
+    try {
+      const { data, error } = await supabase
+        .from('question_groups')
+        .update(updatedGroup)
+        .eq('id', id)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      const index = questionGroups.value.findIndex(g => g.id === id)
+      if (index !== -1) {
+        questionGroups.value[index] = data
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error editing question group:', error)
+      return null
+    }
+  }
+
+  const deleteQuestionGroup = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('question_groups')
+        .delete()
+        .eq('id', id)
+
+      if (error) throw error
+
+      const index = questionGroups.value.findIndex(g => g.id === id)
+      if (index !== -1) {
+        questionGroups.value.splice(index, 1)
+      }
+      return true
+    } catch (error) {
+      console.error('Error deleting question group:', error)
+      return false
+    }
+  }
+
   const filterByGroup = (groupId) => {
-    return questions.value.filter(q => q.groupId === groupId)
+    return questions.value.filter(q => q.group_id === groupId)
   }
 
   const addQuestion = async (newQuestion) => {
@@ -127,6 +188,9 @@ export const useQuestionsStore = defineStore('questions', () => {
     loadQuestions,
     loadCategories,
     loadQuestionGroups,
+    addQuestionGroup,
+    editQuestionGroup,
+    deleteQuestionGroup,
     filterByGroup,
     addQuestion,
     editQuestion,

@@ -8,6 +8,8 @@ import AdminLayout from '../admin/AdminLayout.vue'
 import AdminHome from '../admin/AdminHome.vue'
 import AdminUsers from '../admin/AdminUsers.vue'
 import AdminQuestions from '../admin/AdminQuestions.vue'
+import AdminUserGroups from '../admin/AdminUserGroups.vue'
+import AdminQuestionGroups from '../admin/AdminQuestionGroups.vue'
 import AdminAssignTests from '../admin/AdminAssignTests.vue'
 import AdminResults from '../admin/AdminResults.vue'
 
@@ -51,9 +53,19 @@ const routes = [
         component: AdminUsers
       },
       {
+        path: 'user-groups',
+        name: 'AdminUserGroups',
+        component: AdminUserGroups
+      },
+      {
         path: 'questions',
         name: 'AdminQuestions',
         component: AdminQuestions
+      },
+      {
+        path: 'question-groups',
+        name: 'AdminQuestionGroups',
+        component: AdminQuestionGroups
       },
       {
         path: 'assign-tests',

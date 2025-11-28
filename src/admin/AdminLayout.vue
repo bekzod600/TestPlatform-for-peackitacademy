@@ -12,8 +12,9 @@
             'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin',
             'text-gray-600 hover:bg-gray-50': $route.path !== '/admin'
           }"
-          class="block px-6 py-3 font-medium transition"
+          class="block px-6 py-3 font-medium transition flex items-center gap-2"
         >
+          <i class="mdi mdi-view-dashboard"></i>
           Bosh sahifa
         </router-link>
 
@@ -23,9 +24,22 @@
             'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/users',
             'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/users'
           }"
-          class="block px-6 py-3 font-medium transition"
+          class="block px-6 py-3 font-medium transition flex items-center gap-2"
         >
+          <i class="mdi mdi-account-multiple"></i>
           Foydalanuvchilar
+        </router-link>
+
+        <router-link
+          to="/admin/user-groups"
+          :class="{
+            'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/user-groups',
+            'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/user-groups'
+          }"
+          class="block px-6 py-3 font-medium transition flex items-center gap-2"
+        >
+          <i class="mdi mdi-account-group"></i>
+          O'quv guruhlari
         </router-link>
 
         <router-link
@@ -34,9 +48,22 @@
             'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/questions',
             'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/questions'
           }"
-          class="block px-6 py-3 font-medium transition"
+          class="block px-6 py-3 font-medium transition flex items-center gap-2"
         >
+          <i class="mdi mdi-help-circle"></i>
           Savollar
+        </router-link>
+
+        <router-link
+          to="/admin/question-groups"
+          :class="{
+            'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/question-groups',
+            'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/question-groups'
+          }"
+          class="block px-6 py-3 font-medium transition flex items-center gap-2"
+        >
+          <i class="mdi mdi-format-list-group"></i>
+          Savollar guruhi
         </router-link>
 
         <router-link
@@ -45,8 +72,9 @@
             'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/assign-tests',
             'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/assign-tests'
           }"
-          class="block px-6 py-3 font-medium transition"
+          class="block px-6 py-3 font-medium transition flex items-center gap-2"
         >
+          <i class="mdi mdi-link-variant"></i>
           Test biriktirish
         </router-link>
 
@@ -56,8 +84,9 @@
             'bg-blue-50 text-blue-600 border-r-4 border-blue-600': $route.path === '/admin/results',
             'text-gray-600 hover:bg-gray-50': $route.path !== '/admin/results'
           }"
-          class="block px-6 py-3 font-medium transition"
+          class="block px-6 py-3 font-medium transition flex items-center gap-2"
         >
+          <i class="mdi mdi-chart-bar"></i>
           Test natijalari
         </router-link>
       </nav>
@@ -65,8 +94,9 @@
       <div class="absolute bottom-0 left-0 w-64 p-6 border-t border-gray-200">
         <button
           @click="handleLogout"
-          class="w-full bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition"
+          class="w-full bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition flex items-center justify-center gap-2"
         >
+          <i class="mdi mdi-logout"></i>
           Chiqish
         </button>
       </div>
