@@ -4,6 +4,21 @@
 @plugin "flowbite/plugin";
 @source "../node_modules/flowbite-vue";
 
+/* Disable text selection */
+*, 
+::before,
+::after {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-drag: none !important;
+  -khtml-user-drag: none !important;
+  -moz-user-drag: none !important;
+  -ms-user-drag: none !important;
+}
+
 body {
   font-family: 'Inter', sans-serif;
 }

@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-gray-100">
+  <div class="min-h-screen bg-gray-100" @contextmenu.prevent @copy.prevent @cut.prevent>
     <!-- Navbar -->
     <nav class="bg-blue-600 text-white shadow-lg">
       <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -123,6 +123,16 @@ const handleLogout = () => {
   router.push('/login')
 }
 
+// Savollarni shuffle qilish funksiyasi
+const shuffleArray = (array) => {
+  const shuffled = [...array]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
+}
+
 const startTest = async () => {
   // Foydalanuvchiga test biriktirilganmi tekshirish
   if (!currentUser.value?.assigned_question_group) {
@@ -140,6 +150,13 @@ const startTest = async () => {
     if (filteredQuestions.length === 0) {
       showSnackbar("Sizning test guruhingizda savollar mavjud emas!", 'error')
       return
+    }
+    // Savollarni shuffle qilish
+    let shuffledQuestions = shuffleArray(filteredQuestions)
+    
+    // Maksimum 50 ta savol olish
+    if (shuffledQuestions.length > 50) {
+      shuffledQuestions = shuffledQuestions.slice(0, 50)
     }
     
     testStore.startTest(filteredQuestions)
