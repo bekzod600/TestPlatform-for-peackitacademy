@@ -37,16 +37,12 @@
         <button
           type="submit"
           class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition font-medium"
+          :disabled="loading"
         >
-          Kirish
+          <i v-if="loading" class="mdi mdi-loading mdi-spin"></i>
+          <span v-else>Kirish</span>
         </button>
       </form>
-
-      <div class="mt-6 text-sm text-gray-600">
-        <p class="font-semibold mb-2">Test uchun:</p>
-        <p>Admin: admin / admin123</p>
-        <p>Student: student1 / 1234</p>
-      </div>
     </div>
   </div>
 </template>
@@ -61,11 +57,12 @@ const usersStore = useUsersStore()
 
 const username = ref('')
 const password = ref('')
+const loading = ref(false)
 const error = ref('')
 
 const handleLogin = async () => {
   error.value = ''
-
+  loading.value = true
   const user = await usersStore.login(username.value, password.value)
 
   if (user) {
@@ -77,5 +74,6 @@ const handleLogin = async () => {
   } else {
     error.value = "Noto'g'ri foydalanuvchi nomi yoki parol"
   }
+  loading.value = false
 }
 </script>
