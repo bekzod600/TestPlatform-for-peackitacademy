@@ -189,6 +189,8 @@ const answeredCount = computed(() => {
 const tabSwitchCount = ref(0)
 const maxTabSwitches = 3
 const showTabWarning = ref(false)
+let devToolsCheck = null
+let selectionStyle = null
 
 // 🔒 HIMOYA: Developer Tools
 const checkDevTools = () => {
@@ -241,8 +243,8 @@ const preventDevTools = (e) => {
 
 // 🔒 HIMOYA: Matnni tanlash
 const preventSelection = () => {
-  const style = document.createElement('style')
-  style.textContent = `
+  const selectionStyle = document.createElement('style')
+  selectionStyle.textContent = `
     * {
       -webkit-user-select: none !important;
       -moz-user-select: none !important;
@@ -256,11 +258,11 @@ const preventSelection = () => {
       user-select: auto !important;
     }
   `
-  document.head.appendChild(style)
+  document.head.appendChild(selectionStyle)
 }
 
 // 🔒 Test avtomatik yakunlash
-const finishTestAutomatically = () => {
+const finishTestAutomatically = async () => {
   testStore.finishTest()
   
   const testResult = {
@@ -273,7 +275,7 @@ const finishTestAutomatically = () => {
     finished_reason: 'Qoidabuzarlik aniqlandi'
   }
   
-  usersStore.saveTestResult(currentUser.value.id, testResult)
+  await usersStore.saveTestResult(currentUser.value.id, testResult)
   router.push('/results')
 }
 
@@ -284,14 +286,19 @@ onMounted(() => {
   document.addEventListener('keydown', preventScreenshot)
   document.addEventListener('keydown', preventDevTools)
   
-  const devToolsCheck = setInterval(checkDevTools, 1000)
+  devToolsCheck = setInterval(checkDevTools, 1000)
   
-  onUnmounted(() => {
-    document.removeEventListener('visibilitychange', handleVisibilityChange)
-    document.removeEventListener('keydown', preventScreenshot)
-    document.removeEventListener('keydown', preventDevTools)
-    clearInterval(devToolsCheck)
-  })
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  document.removeEventListener('keydown', preventScreenshot)
+  document.removeEventListener('keydown', preventDevTools)
+  clearInterval(devToolsCheck)
+
+  if (selectionStyle) {
+    selectionStyle.remove()
+  }
 })
 
 const handleAnswerSelect = (questionId, answerIndex) => {
