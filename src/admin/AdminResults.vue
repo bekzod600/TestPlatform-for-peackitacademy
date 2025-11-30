@@ -14,7 +14,7 @@
 
     <!-- Search + Export -->
     <fwb-card class="p-6">
-      <div class="flex flex-col md:flex-row justify-between gap-4 mb-6">
+      <!-- <div class="flex flex-col md:flex-row justify-between gap-4 mb-6">
         <fwb-input
           v-model="search"
           placeholder="Qidirish..."
@@ -29,7 +29,7 @@
           <i class="mdi mdi-microsoft-excel text-xl mr-2"></i>
           Excelga export
         </fwb-button>
-      </div>
+      </div> -->
 
       <!-- Students Table -->
       <div class="overflow-x-auto">
@@ -109,9 +109,9 @@
     </fwb-card>
 
     <!-- Test Details Modal -->
-    <fwb-modal v-if="showDetailsDialog" @close="showDetailsDialog = false">
+    <fwb-modal size='3xl' v-if="showDetailsDialog" @close="showDetailsDialog = false">
       <template #header>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-2/3">
           <i class="mdi mdi-account-circle text-3xl text-blue-600"></i>
           <h2 class="text-xl font-semibold text-gray-900">
             {{ selectedStudent?.full_name }} — Test natijalari
@@ -138,16 +138,23 @@
                   :class="test.percentage >= 60 ? 'bg-green-500' : 'bg-red-500'" 
                   size="8" 
                   rounded
-                >
+                >jhknkjn
                   <span class="text-white font-bold">{{ test.percentage }}%</span>
+                </fwb-avatar>
+                <fwb-avatar 
+                  class="bg-green-500" 
+                  size="8" 
+                  rounded
+                >
+                jhknkjn
                 </fwb-avatar>
                 <div>
                   <p class="font-semibold text-gray-900">
-                    {{ getQuestionGroupName(test.groupId) }}
+                    {{ getQuestionGroupName(test.group_id) }}
                   </p>
-                  <p class="text-sm text-gray-500">
-                    {{ test.score }}/{{ test.totalQuestions }} •
-                    {{ formatDate(test.completedAt) }}
+                  <p class="text-sm text-start text-gray-500">
+                    {{ test.score }}/{{ test.total_questions }} •
+                    {{ formatDate(test.completed_at) }}
                   </p>
                 </div>
               </div>
@@ -161,7 +168,7 @@
 
                 <div>
                   <p class="text-gray-500 text-sm mb-1">Noto'g'ri</p>
-                  <fwb-badge type="red">{{ test.totalQuestions - test.score }}</fwb-badge>
+                  <fwb-badge type="red">{{ test.total_questions - test.score }}</fwb-badge>
                 </div>
 
                 <div>
@@ -173,7 +180,7 @@
 
                 <div>
                   <p class="text-gray-500 text-sm mb-1">Sana</p>
-                  <span class="text-sm text-gray-700">{{ formatDate(test.completedAt) }}</span>
+                  <span class="text-sm text-gray-700">{{ formatDate(test.completed_at) }}</span>
                 </div>
               </div>
             </fwb-accordion-content>
