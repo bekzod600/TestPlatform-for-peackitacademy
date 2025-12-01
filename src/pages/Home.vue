@@ -9,7 +9,7 @@
         </div>
 
         <div class="flex items-center space-x-4">
-          <span class="flex items-center space-x-1 bg-blue-500 px-3 py-1 rounded-full">
+          <span class="hidden md:flex items-center space-x-1 bg-blue-500 px-3 py-1 rounded-full">
             <i class="mdi mdi-account-circle"></i>
             <span>{{ currentUser?.full_name }}</span>
           </span>

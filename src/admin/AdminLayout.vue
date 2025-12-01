@@ -12,7 +12,7 @@
      <div class="md:w-64">
       <aside
         :class="[
-          'bg-white shadow-lg fixed top-0 left-0 h-screen w-64 z-50 transform transition-transform duration-300 ease-in-out',
+          'bg-white shadow-lg fixed top-0 left-0 h-[100svh] w-64 z-50 transform transition-transform duration-300 ease-in-out',
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
           'md:fixed md:shadow-none'
         ]"
