@@ -15,7 +15,10 @@ export const useQuestionsStore = defineStore('questions', () => {
         .order('id', { ascending: true })
       
       if (error) throw error
-      questions.value = data || []
+      questions.value = (data || []).map(q => ({
+        ...q,
+        answers: typeof q.answers === 'string' ? JSON.parse(q.answers) : q.answers
+      }))
       return data
     } catch (error) {
       console.error('Error loading questions:', error)

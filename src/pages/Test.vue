@@ -12,13 +12,13 @@
             {{ currentUser?.full_name }}
           </span>
 
-          <button
+          <!-- <button
             @click="goHome"
             class="flex items-center bg-white text-blue-700 px-3 py-1 rounded-lg shadow hover:bg-gray-200 transition"
           >
             Bosh sahifa
-          </button>
-        </div>
+          </button> -->
+        </div> 
       </div>
     </nav>
 

@@ -27,7 +27,7 @@
 
     <!-- Main Content -->
     <div class="flex justify-center items-center py-12">
-      <div class="w-full max-w-[calc(100%-2rem)] md:max-w-2/3 bg-white shadow-xl rounded-2xl p-8">
+      <div class="w-full max-w-[calc(100%-2rem)] md:max-w-2xl lg:max-w-3xl xl:max-w-4xl  bg-white shadow-xl rounded-2xl p-8">
         
         <div class="text-center">
           <div class="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center">
