@@ -79,7 +79,7 @@
             >
               <div class="flex items-start gap-3">
                 <div
-                  class="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
+                  class="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold"
                   :class="{
                     'bg-green-500': isCorrect(question),
                     'bg-red-500': !isCorrect(question)

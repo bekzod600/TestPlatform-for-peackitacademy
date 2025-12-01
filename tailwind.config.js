@@ -2,9 +2,9 @@
 export default {
   darkMode: 'class', // yoki 'media'
   content: [
-    "./index.html",
-    "./src/**/*.{vue,js,ts,jsx,tsx}",
-    // "./node_modules/flowbite/**/*.js",
+    './index.html',
+    './src/**/*.{vue,js,ts,jsx,tsx}',
+    './node_modules/flowbite/**/*.js',  // Flowbite uchun shart
   ],
   theme: {
     extend: {},

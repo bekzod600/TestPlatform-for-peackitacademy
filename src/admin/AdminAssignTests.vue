@@ -1,148 +1,170 @@
 <template>
-  <div class="space-y-8">
-
+  <div class="space-y-4 sm:space-y-6 lg:space-y-8">
     <!-- Page header -->
-    <div class="flex justify-between items-center">
-      <h2 class="text-3xl font-bold text-gray-800 flex items-center gap-2">
-        <i class="mdi mdi-link-variant text-blue-600 text-4xl"></i>
-        Guruhlarga test biriktirish
+    <div class="flex flex-col gap-2 sm:gap-4">
+      <h2 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center gap-2">
+        <i class="mdi mdi-link-variant text-blue-600 text-2xl sm:text-3xl lg:text-4xl"></i>
+        <span>Guruhlarga test biriktirish</span>
       </h2>
     </div>
 
-    <!-- Main grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-
+    <!-- Main grid - Responsive -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
       <!-- LEFT: Groups list -->
-      <div class="bg-white rounded-xl shadow-lg p-6">
-        <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
-          <i class="mdi mdi-account-group text-blue-600"></i>
-          O‘quv markaz guruhlari
+      <div class="bg-white rounded-xl shadow-lg p-3 sm:p-4 lg:p-6">
+        <h3 class="text-base sm:text-lg lg:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+          <i class="mdi mdi-account-group text-blue-600 text-lg sm:text-xl"></i>
+          <span>O'quv markaz guruhlari</span>
         </h3>
 
-        <div class="">
+        <div class="space-y-2">
           <div
             v-for="group in userGroups"
             :key="group.id"
             @click="selectGroup(group)"
-            class="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition border-t border-gray-200"
-            :class="selectedGroup?.id === group.id ? 'bg-blue-50' : ''"
+            class="flex flex-col gap-2 p-3 sm:p-4 cursor-pointer hover:bg-gray-50 active:bg-blue-50 transition rounded-lg border"
+            :class="selectedGroup?.id === group.id ? 'bg-blue-50 border-blue-500 shadow-sm' : 'border-gray-200'"
           >
-            <div class="flex items-center gap-3">
-              <div>
-                <p class="font-medium text-lg text-gray-800">{{ group.name }}</p>
-                <p class="text-gray-500 text-sm">{{ getStudentCount(group.id) }} ta student</p>
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <p class="font-medium text-sm sm:text-base text-gray-800 line-clamp-2">
+                  {{ group.name }}
+                </p>
+                <p class="text-xs sm:text-sm text-gray-500 mt-0.5">
+                  <i class="mdi mdi-account-multiple text-xs"></i>
+                  {{ getStudentCount(group.id) }} ta student
+                </p>
               </div>
-            </div>
 
-            <span
-              class="px-3 py-1 rounded-full text-sm font-medium"
-              :class="group.assigned_question_group
-                ? 'bg-green-100 text-green-700'
-                : 'bg-yellow-100 text-yellow-700'"
-            >
-              <i class="mdi" :class="group.assigned_question_group ? 'mdi-check' : 'mdi-alert-circle'" />
-              {{ group.assigned_question_group ? 'Test bor' : 'Test yo‘q' }}
-            </span>
+              <span
+                class="px-2 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0"
+                :class="group.assigned_question_group
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-yellow-100 text-yellow-700'"
+              >
+                <i class="mdi text-xs" :class="group.assigned_question_group ? 'mdi-check' : 'mdi-alert-circle'" />
+                <span class="hidden sm:inline ml-1">
+                  {{ group.assigned_question_group ? 'Test bor' : 'Test yo\'q' }}
+                </span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Empty state -->
+          <div v-if="userGroups.length === 0" class="text-center py-6 sm:py-8">
+            <i class="mdi mdi-account-group-outline text-4xl sm:text-5xl text-gray-300 mb-2 block"></i>
+            <p class="text-gray-500 text-xs sm:text-sm">Hozircha guruhlar yo'q</p>
           </div>
         </div>
       </div>
 
       <!-- RIGHT: Assign test -->
-      <div class="space-y-8">
-
+      <div class="space-y-3 sm:space-y-4 lg:space-y-6">
         <!-- Select test card -->
-        <div class="bg-white rounded-xl shadow-lg p-6"
+        <div class="bg-white rounded-xl shadow-lg p-3 sm:p-4 lg:p-6"
              :class="!selectedGroup ? 'opacity-60 pointer-events-none' : ''">
 
-          <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
-            <i class="mdi mdi-help-circle text-blue-600"></i>
-            Test guruhini tanlang
+          <h3 class="text-base sm:text-lg lg:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+            <i class="mdi mdi-help-circle text-blue-600 text-lg sm:text-xl"></i>
+            <span>Test guruhini tanlang</span>
           </h3>
 
-          <div v-if="!selectedGroup" class="bg-blue-50 text-blue-600 p-4 rounded-lg flex items-center gap-3">
-            <i class="mdi mdi-information text-xl"></i>
-            Avval chap tomondan guruhni tanlang
+          <div v-if="!selectedGroup" class="bg-blue-50 text-blue-600 p-3 sm:p-4 rounded-lg flex items-start gap-2 sm:gap-3">
+            <i class="mdi mdi-information text-lg sm:text-xl flex-shrink-0 mt-0.5"></i>
+            <span class="text-xs sm:text-sm">Avval chap tomondan guruhni tanlang</span>
           </div>
 
-          <div v-else>
-
+          <div v-else class="space-y-3 sm:space-y-4">
             <!-- Selected group box -->
-            <div class="bg-green-50 text-green-700 p-4 rounded-lg mb-5">
-              <strong>Tanlangan guruh:</strong> {{ selectedGroup.name }}
+            <div class="bg-green-50 text-green-700 p-3 sm:p-4 rounded-lg border border-green-200">
+              <strong class="text-xs sm:text-sm font-semibold block mb-1">Tanlangan guruh:</strong>
+              <p class="text-xs sm:text-sm line-clamp-2">{{ selectedGroup.name }}</p>
             </div>
 
             <!-- Select test group dropdown -->
-            <label class="block text-sm font-medium text-gray-700 mb-2">Test guruhini tanlang</label>
-            <select
-              v-model="selectedQuestionGroup"
-              class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option disabled value="">Tanlang…</option>
-
-              <option
-                v-for="qg in questionGroups"
-                :key="qg.id" :value="qg.id"
+            <div>
+              <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
+                Test guruhini tanlang
+              </label>
+              <select
+                v-model="selectedQuestionGroup"
+                class="w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs sm:text-sm"
               >
-                {{ qg.name }} — ({{ getQuestionCount(qg.id) }} ta savol)
-              </option>
-            </select>
+                <option disabled value="">Tanlang…</option>
+                <option
+                  v-for="qg in questionGroups"
+                  :key="qg.id" :value="qg.id"
+                  class="text-xs sm:text-sm"
+                >
+                  {{ qg.name }} — ({{ getQuestionCount(qg.id) }} ta savol)
+                </option>
+              </select>
+            </div>
 
             <!-- Warning -->
             <div
               v-if="selectedGroup.assigned_question_group"
-              class="bg-yellow-50 text-yellow-700 p-3 rounded-lg mt-4 flex items-center gap-2"
+              class="bg-yellow-50 border border-yellow-200 text-yellow-700 p-3 rounded-lg flex items-start gap-2 text-xs sm:text-sm"
             >
-              <i class="mdi mdi-alert"></i>
-              Yangi test tanlansa — eski test o‘chadi.
+              <i class="mdi mdi-alert flex-shrink-0 mt-0.5 text-base"></i>
+              <span>Yangi test tanlansa — eski test o'chadi.</span>
             </div>
 
             <!-- Button -->
             <button
               @click="assignTest"
               :disabled="assigning || !selectedQuestionGroup"
-              class="mt-5 w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg transition disabled:bg-gray-400"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 sm:py-2.5 lg:py-3 rounded-lg transition disabled:bg-gray-400 disabled:cursor-not-allowed text-xs sm:text-sm lg:text-base font-medium flex items-center justify-center gap-2"
             >
-              <i class="mdi mdi-link-variant mr-1"></i>
-              Testni biriktirish
+              <i class="mdi" :class="assigning ? 'mdi-loading mdi-spin' : 'mdi-link-variant'"></i>
+              {{ assigning ? 'Biriktirilmoqda...' : 'Testni biriktirish' }}
             </button>
           </div>
         </div>
 
         <!-- Students in group -->
-        <div v-if="selectedGroup" class="bg-white rounded-xl shadow-lg p-6">
-          <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
-            <i class="mdi mdi-account-multiple text-blue-600"></i>
-            Guruh ichidagi studentlar
+        <div v-if="selectedGroup" class="bg-white rounded-xl shadow-lg p-3 sm:p-4 lg:p-6">
+          <h3 class="text-base sm:text-lg lg:text-xl font-semibold mb-3 sm:mb-4 flex items-center gap-2">
+            <i class="mdi mdi-account-multiple text-blue-600 text-lg sm:text-xl"></i>
+            <span>Guruh ichidagi studentlar</span>
           </h3>
 
-          <div class="">
+          <div class="space-y-2">
             <div
               v-for="student in getGroupStudents(selectedGroup.id)"
               :key="student.id"
-              class="p-4 flex justify-between items-center hover:bg-gray-50 transition border-t border-gray-200"
+              class="p-2 sm:p-3 lg:p-4 flex items-center justify-between gap-2 hover:bg-gray-50 transition rounded-lg border border-gray-200"
             >
-              <div class="flex items-center gap-3">
-                <div>
-                  <p class="font-medium text-gray-800">{{ student.full_name }}</p>
-                  <p class="text-sm text-gray-500">@{{ student.username }}</p>
+              <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <i class="mdi mdi-account text-blue-600 text-sm sm:text-base"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <p class="font-medium text-gray-800 text-xs sm:text-sm truncate">{{ student.full_name }}</p>
+                  <p class="text-xs text-gray-500 truncate">@{{ student.username }}</p>
                 </div>
               </div>
 
               <span
-                class="px-3 py-1 rounded-full text-sm font-medium"
+                class="px-2 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0"
                 :class="student.assigned_question_group
                   ? 'bg-green-100 text-green-700'
                   : 'bg-gray-200 text-gray-600'"
               >
-                {{ student.assigned_question_group ? 'Test bor' : 'Test yo‘q' }}
+                <i class="mdi text-xs" :class="student.assigned_question_group ? 'mdi-check' : 'mdi-close'" />
+                <span class="hidden sm:inline ml-1">
+                  {{ student.assigned_question_group ? 'Test bor' : 'Test yo\'q' }}
+                </span>
               </span>
             </div>
 
+            <!-- Empty state -->
             <div
               v-if="getGroupStudents(selectedGroup.id).length === 0"
-              class="p-4 text-center text-gray-500"
+              class="p-6 sm:p-8 text-center text-gray-500 border border-dashed border-gray-300 rounded-lg"
             >
-              Bu guruhda studentlar yo‘q
+              <i class="mdi mdi-account-off text-3xl sm:text-4xl text-gray-300 mb-2 block"></i>
+              <p class="text-xs sm:text-sm">Bu guruhda studentlar yo'q</p>
             </div>
           </div>
         </div>
@@ -153,20 +175,17 @@
     <transition name="fade">
       <div
         v-if="snackbar"
-        class="fixed bottom-6 right-6 px-6 py-3 rounded-lg shadow-lg text-white"
+        class="fixed bottom-4 sm:bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md px-4 sm:px-6 py-3 rounded-lg shadow-lg text-white text-sm sm:text-base z-50"
         :class="snackbarColor === 'success' ? 'bg-green-600' : 'bg-red-600'"
       >
         {{ snackbarText }}
       </div>
     </transition>
-
   </div>
 </template>
 
-
-
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useUsersStore } from '../stores/users'
 import { useQuestionsStore } from '../stores/questions'
 
@@ -230,10 +249,8 @@ const assignTest = async () => {
     if (success) {
       showSnackbar(`Test ${selectedGroup.value.name} guruhiga muvaffaqiyatli biriktirildi! ${getStudentCount(selectedGroup.value.id)} ta student test oldi.`, 'success')
       
-      // Ma'lumotlarni yangilash
       await loadData()
       
-      // Tanlangan guruhni yangilash
       const updatedGroup = userGroups.value.find(g => g.id === selectedGroup.value.id)
       if (updatedGroup) {
         selectedGroup.value = updatedGroup
@@ -245,6 +262,7 @@ const assignTest = async () => {
     assigning.value = false
   }
 }
+
 const showSnackbar = (text, color) => {
   snackbarText.value = text
   snackbarColor.value = color
@@ -255,7 +273,17 @@ const showSnackbar = (text, color) => {
 </script>
 
 <style scoped>
-.cursor-pointer {
-  cursor: pointer;
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>
