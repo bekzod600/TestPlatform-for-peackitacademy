@@ -166,7 +166,6 @@ export const useUsersStore = defineStore('users', () => {
         users.value[index] = data
       }
 
-      // Agar joriy foydalanuvchini tahrirlayotgan bo'lsak
       if (currentUser.value && currentUser.value.id === id) {
         currentUser.value = data
         localStorage.setItem('currentUser', JSON.stringify(data))
@@ -201,7 +200,6 @@ export const useUsersStore = defineStore('users', () => {
   
   const assignTestToGroup = async (userGroupId, questionGroupId) => {
     try {
-      // 1. User Group ga test biriktirish
       const { error: groupError } = await supabase
         .from('user_groups')
         .update({ assigned_question_group: questionGroupId })
@@ -209,7 +207,6 @@ export const useUsersStore = defineStore('users', () => {
 
       if (groupError) throw groupError
 
-      // 2. Guruh ichidagi barcha studentlarni topish
       const { data: students, error: studentsError } = await supabase
         .from('users')
         .select('*')
@@ -218,22 +215,24 @@ export const useUsersStore = defineStore('users', () => {
 
       if (studentsError) throw studentsError
 
-      // 3. Har bir studentga test biriktirish
       if (students && students.length > 0) {
         const updates = students.map(student => ({
           id: student.id,
-          assigned_question_group: questionGroupId
+          assigned_question_group: questionGroupId,
+          test_started_at: null // Reset test vaqtini
         }))
 
         for (const update of updates) {
           await supabase
             .from('users')
-            .update({ assigned_question_group: update.assigned_question_group })
+            .update({ 
+              assigned_question_group: update.assigned_question_group,
+              test_started_at: update.test_started_at
+            })
             .eq('id', update.id)
         }
       }
 
-      // User Groups ni qayta yuklash
       await loadUserGroups()
       await loadUsers()
 
@@ -244,9 +243,31 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  const startTest = async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ test_started_at: new Date().toISOString() })
+        .eq('id', userId)
+        .select()
+        .single()
+
+      if (error) throw error
+
+      if (currentUser.value && currentUser.value.id === userId) {
+        currentUser.value = data
+        localStorage.setItem('currentUser', JSON.stringify(data))
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error starting test:', error)
+      return null
+    }
+  }
+
   const saveTestResult = async (userId, testResult) => {
     try {
-      // Foydalanuvchini olish
       const { data: user, error: fetchError } = await supabase
         .from('users')
         .select('completed_tests')
@@ -255,16 +276,15 @@ export const useUsersStore = defineStore('users', () => {
 
       if (fetchError) throw fetchError
 
-      // Yangi test natijasini qo'shish
       const completedTests = user.completed_tests || []
       completedTests.push(testResult)
 
-      // Foydalanuvchini yangilash
       const { data, error } = await supabase
         .from('users')
         .update({ 
           completed_tests: completedTests,
-          assigned_question_group: null // Test topshirildi, guruhn null
+          assigned_question_group: null,
+          test_started_at: null // Reset test vaqti
         })
         .eq('id', userId)
         .select()
@@ -272,7 +292,6 @@ export const useUsersStore = defineStore('users', () => {
 
       if (error) throw error
 
-      // Joriy foydalanuvchini yangilash
       if (currentUser.value && currentUser.value.id === userId) {
         currentUser.value = data
         localStorage.setItem('currentUser', JSON.stringify(data))
@@ -301,6 +320,7 @@ export const useUsersStore = defineStore('users', () => {
     editUser,
     deleteUser,
     assignTestToGroup,
+    startTest,
     saveTestResult
   }
 })

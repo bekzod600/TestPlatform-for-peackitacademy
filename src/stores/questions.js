@@ -62,7 +62,11 @@ export const useQuestionsStore = defineStore('questions', () => {
     try {
       const { data, error } = await supabase
         .from('question_groups')
-        .insert([newGroup])
+        .insert([{
+          ...newGroup,
+          duration_minutes: newGroup.duration_minutes || 60,
+          questions_count: newGroup.questions_count || 50
+        }])
         .select()
         .single()
 

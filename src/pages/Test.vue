@@ -1,6 +1,5 @@
 <template>
   <div class="min-h-screen bg-gray-100" @contextmenu.prevent @copy.prevent @cut.prevent @paste.prevent>
-    <!-- Navbar -->
     <nav class="bg-blue-600 text-white shadow-md px-4 py-3">
       <div class="flex justify-between items-center max-w-7xl mx-auto">
         <div class="flex items-center space-x-2">
@@ -8,32 +7,27 @@
         </div>
 
         <div class="flex items-center space-x-4">
+          <!-- Timer -->
+          <div 
+            class="flex items-center bg-white px-4 py-2 rounded-full shadow-sm"
+            :class="timeRemaining <= 300 ? 'text-red-600' : 'text-blue-700'"
+          >
+            <i class="mdi mdi-clock-outline mr-2"></i>
+            <span class="font-bold text-lg">{{ formatTime(timeRemaining) }}</span>
+          </div>
+
           <span class="flex items-center bg-white text-blue-700 px-3 py-1 rounded-full shadow-sm">
             {{ currentUser?.full_name }}
           </span>
-
-          <!-- <button
-            @click="goHome"
-            class="flex items-center bg-white text-blue-700 px-3 py-1 rounded-lg shadow hover:bg-gray-200 transition"
-          >
-            Bosh sahifa
-          </button> -->
         </div> 
       </div>
     </nav>
 
-    <!-- Main Area -->
     <div class="max-w-4xl mx-auto py-10 px-4">
-
-      <!-- Test topilmadi -->
-      <div v-if="!testStore.isTestActive"
-           class="bg-white rounded-2xl shadow-lg p-12 text-center">
-        
+      <div v-if="!testStore.isTestActive" class="bg-white rounded-2xl shadow-lg p-12 text-center">
         <div class="text-yellow-500 text-7xl mb-6">⚠️</div>
-
         <h2 class="text-3xl font-bold mb-4">Test topilmadi</h2>
         <p class="text-gray-600 mb-6">Iltimos, avval testni boshlang.</p>
-
         <button
           @click="goHome"
           class="bg-blue-600 text-white px-6 py-3 rounded-xl shadow hover:bg-blue-700 transition"
@@ -42,10 +36,7 @@
         </button>
       </div>
 
-      <!-- Test Active -->
       <div v-else class="bg-white rounded-2xl shadow-lg overflow-hidden">
-
-        <!-- Title Bar -->
         <div class="bg-blue-600 text-white p-6">
           <div class="flex flex-col sm:flex-row justify-between items-center">
             <div class="text-xl font-semibold mb-3 sm:mb-0">
@@ -58,7 +49,6 @@
           </div>
         </div>
 
-        <!-- Progress Bar -->
         <div class="w-full bg-gray-200 h-2">
           <div
             class="bg-green-500 h-2 transition-all duration-300"
@@ -66,14 +56,12 @@
           ></div>
         </div>
 
-        <!-- Question -->
         <div class="p-8">
           <div v-if="currentQuestion">
             <div class="bg-gray-100 p-5 rounded-lg text-lg font-semibold mb-6">
               {{ currentQuestion.question }}
             </div>
 
-            <!-- Answers -->
             <div class="space-y-4">
               <div v-for="(answer, index) in currentQuestion.answers"
                    :key="index"
@@ -97,7 +85,6 @@
           </div>
         </div>
 
-        <!-- Action Buttons -->
         <div class="border-t p-6 flex justify-between">
           <button
             @click="previousQuestion"
@@ -126,7 +113,6 @@
       </div>
     </div>
 
-    <!-- Finish Modal -->
     <div v-if="showFinishDialog"
          class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
       <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-6">
@@ -156,7 +142,6 @@
       </div>
     </div>
 
-    <!-- Tab Switch Warning -->
     <div v-if="showTabWarning"
          class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50">
       ⚠️ Ogohlantirish {{ tabSwitchCount }}/3: Tab almashtirmang!
@@ -169,10 +154,12 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUsersStore } from '../stores/users'
 import { useTestStore } from '../stores/test'
+import { useQuestionsStore } from '../stores/questions'
 
 const router = useRouter()
 const usersStore = useUsersStore()
 const testStore = useTestStore()
+const questionsStore = useQuestionsStore()
 
 const currentUser = computed(() => usersStore.currentUser)
 const currentIndex = computed(() => testStore.currentIndex)
@@ -185,24 +172,61 @@ const answeredCount = computed(() => {
   return Object.keys(selectedAnswers.value).length
 })
 
-// 🔒 HIMOYA: Tab almashtirish
+// Timer
+const timeRemaining = ref(0)
+let timerInterval = null
+
+// Tab switch himoya
 const tabSwitchCount = ref(0)
 const maxTabSwitches = 3
 const showTabWarning = ref(false)
 let devToolsCheck = null
-let selectionStyle = null
 
-// 🔒 HIMOYA: Developer Tools
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+const startTimer = async () => {
+  // Question group ma'lumotlarini olish
+  const questionGroups = await questionsStore.loadQuestionGroups()
+  const questionGroup = questionGroups.find(qg => qg.id === currentUser.value?.assigned_question_group)
+  
+  const durationMinutes = questionGroup?.duration_minutes || 60
+  
+  // Test boshlangan vaqtni olish
+  const startedAt = currentUser.value?.test_started_at
+  
+  if (!startedAt) {
+    timeRemaining.value = durationMinutes * 60
+  } else {
+    const startTime = new Date(startedAt).getTime()
+    const currentTime = new Date().getTime()
+    const elapsedSeconds = Math.floor((currentTime - startTime) / 1000)
+    timeRemaining.value = Math.max(0, (durationMinutes * 60) - elapsedSeconds)
+  }
+  
+  timerInterval = setInterval(() => {
+    timeRemaining.value--
+    
+    if (timeRemaining.value <= 0) {
+      clearInterval(timerInterval)
+      alert('⏰ Vaqt tugadi! Test avtomatik yakunlanadi.')
+      finishTestAutomatically('Vaqt tugadi')
+    }
+  }, 1000)
+}
+
 const checkDevTools = () => {
   const threshold = 160
   if (window.outerWidth - window.innerWidth > threshold || 
       window.outerHeight - window.innerHeight > threshold) {
     alert('⚠️ Developer Tools aniqlandi! Test yakunlanadi.')
-    finishTestAutomatically()
+    finishTestAutomatically('Developer Tools aniqlandi')
   }
 }
 
-// 🔒 HIMOYA: Tab o'zgarganda
 const handleVisibilityChange = () => {
   if (document.hidden && testStore.isTestActive) {
     tabSwitchCount.value++
@@ -214,12 +238,11 @@ const handleVisibilityChange = () => {
     
     if (tabSwitchCount.value >= maxTabSwitches) {
       alert(`⚠️ Siz ${maxTabSwitches} marta tab almashtiringiz! Test avtomatik yakunlanadi.`)
-      finishTestAutomatically()
+      finishTestAutomatically('Qoidabuzarlik aniqlandi')
     }
   }
 }
 
-// 🔒 HIMOYA: Screenshot
 const preventScreenshot = (e) => {
   if ((e.key === 'PrintScreen') || 
       (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) ||
@@ -230,7 +253,6 @@ const preventScreenshot = (e) => {
   }
 }
 
-// 🔒 HIMOYA: F12, Ctrl+Shift+I
 const preventDevTools = (e) => {
   if (e.key === 'F12' || 
       (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
@@ -241,7 +263,6 @@ const preventDevTools = (e) => {
   }
 }
 
-// 🔒 HIMOYA: Matnni tanlash
 const preventSelection = () => {
   const selectionStyle = document.createElement('style')
   selectionStyle.textContent = `
@@ -261,8 +282,11 @@ const preventSelection = () => {
   document.head.appendChild(selectionStyle)
 }
 
-// 🔒 Test avtomatik yakunlash
-const finishTestAutomatically = async () => {
+const finishTestAutomatically = async (reason) => {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+  }
+  
   testStore.finishTest()
   
   const testResult = {
@@ -272,7 +296,7 @@ const finishTestAutomatically = async () => {
     total_questions: testStore.totalQuestions,
     percentage: testStore.percentage,
     completed_at: new Date().toISOString(),
-    finished_reason: 'Qoidabuzarlik aniqlandi'
+    finished_reason: reason
   }
   
   await usersStore.saveTestResult(currentUser.value.id, testResult)
@@ -281,23 +305,26 @@ const finishTestAutomatically = async () => {
 
 onMounted(() => {
   preventSelection()
+  startTimer()
   
   document.addEventListener('visibilitychange', handleVisibilityChange)
   document.addEventListener('keydown', preventScreenshot)
   document.addEventListener('keydown', preventDevTools)
   
   devToolsCheck = setInterval(checkDevTools, 1000)
-  
 })
 
 onUnmounted(() => {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+  }
+  
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   document.removeEventListener('keydown', preventScreenshot)
   document.removeEventListener('keydown', preventDevTools)
-  clearInterval(devToolsCheck)
-
-  if (selectionStyle) {
-    selectionStyle.remove()
+  
+  if (devToolsCheck) {
+    clearInterval(devToolsCheck)
   }
 })
 
@@ -314,6 +341,10 @@ const nextQuestion = () => {
 }
 
 const finishTest = async () => {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+  }
+  
   testStore.finishTest()
   
   const testResult = {

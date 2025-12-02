@@ -1,6 +1,5 @@
 <template>
   <div class="min-h-screen bg-gray-100" @contextmenu.prevent @copy.prevent @cut.prevent>
-    <!-- Navbar -->
     <nav class="bg-blue-600 text-white shadow-lg">
       <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
         <div class="flex items-center space-x-2 text-lg font-semibold">
@@ -25,9 +24,8 @@
       </div>
     </nav>
 
-    <!-- Main Content -->
     <div class="flex justify-center items-center py-12">
-      <div class="w-full max-w-[calc(100%-2rem)] md:max-w-2xl lg:max-w-3xl xl:max-w-4xl  bg-white shadow-xl rounded-2xl p-8">
+      <div class="w-full max-w-[calc(100%-2rem)] md:max-w-2xl lg:max-w-3xl xl:max-w-4xl bg-white shadow-xl rounded-2xl p-8">
         
         <div class="text-center">
           <div class="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center">
@@ -45,10 +43,7 @@
           </div>
         </div>
 
-        <!-- Action Buttons -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-10">
-
-          <!-- Start Test -->
           <button
             @click="startTest"
             :disabled="loading"
@@ -62,7 +57,6 @@
             <p class="text-blue-100 mt-1">Yangi test topshirish</p>
           </button>
 
-          <!-- Results -->
           <button
             @click="viewResults"
             class="cursor-pointer bg-green-600 text-white rounded-xl p-6 shadow-md hover:bg-green-700 transition text-center"
@@ -71,12 +65,10 @@
             <h3 class="text-xl font-semibold">Natijalar</h3>
             <p class="text-green-100 mt-1">Test natijalarini ko'rish</p>
           </button>
-
         </div>
       </div>
     </div>
 
-    <!-- Snackbar -->
     <transition name="fade">
       <div
         v-if="snackbar.show"
@@ -123,18 +115,7 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-// Savollarni shuffle qilish funksiyasi
-const shuffleArray = (array) => {
-  const shuffled = [...array]
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
-  }
-  return shuffled
-}
-
 const startTest = async () => {
-  // Foydalanuvchiga test biriktirilganmi tekshirish
   if (!currentUser.value?.assigned_question_group) {
     showSnackbar("Sizga hali test biriktirilmagan! Admin bilan bog'laning.", 'warning')
     return
@@ -142,28 +123,57 @@ const startTest = async () => {
 
   loading.value = true
   try {
-    const questions = await questionsStore.loadQuestions()
+    const allQuestions = await questionsStore.loadQuestions()
+    const allQuestionGroups = await questionsStore.loadQuestionGroups()
+    
     const questionGroupId = currentUser.value.assigned_question_group
+    const questionGroup = allQuestionGroups.find(qg => qg.id === questionGroupId)
+    
+    if (!questionGroup) {
+      showSnackbar("Test guruhi topilmadi!", 'error')
+      return
+    }
 
-    let filteredQuestions = questions.filter(q => q.group_id === questionGroupId)
+    let filteredQuestions = allQuestions.filter(q => q.group_id === questionGroupId)
     
     if (filteredQuestions.length === 0) {
       showSnackbar("Sizning test guruhingizda savollar mavjud emas!", 'error')
       return
     }
-    // Savollarni shuffle qilish
-    let shuffledQuestions = shuffleArray(filteredQuestions)
+
+    // Questions count cheklovi
+    const maxQuestionsCount = questionGroup.questions_count || 50
     
-    // Maksimum 50 ta savol olish
-    if (shuffledQuestions.length > 50) {
-      shuffledQuestions = shuffledQuestions.slice(0, 50)
-    }
+    // Shuffle va limit
+    filteredQuestions = shuffleArray(filteredQuestions)
+    filteredQuestions = filteredQuestions.slice(0, Math.min(maxQuestionsCount, filteredQuestions.length))
     
-    testStore.startTest(filteredQuestions)
+    // Test davomiyligini saqlash
+    const durationMinutes = questionGroup.duration_minutes || 60
+    
+    // Testni boshlash vaqtini saqlash
+    await usersStore.startTest(currentUser.value.id)
+    
+    // Test ma'lumotlarini store'ga saqlash
+    testStore.startTest(filteredQuestions, {
+      durationMinutes,
+      shuffleQuestions: false, // Biz allaqachon shuffle qildik
+      shuffleAnswers: true
+    })
+    
     router.push('/test')
   } finally {
     loading.value = false
   }
+}
+
+const shuffleArray = (arr) => {
+  const shuffled = [...arr]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+  }
+  return shuffled
 }
 
 const viewResults = () => {
