@@ -91,6 +91,10 @@ router.beforeEach((to, from, next) => {
   const isAuthenticated = !!usersStore.currentUser
   const isAdmin = isAuthenticated && usersStore.currentUser.role === 'admin'
 
+  if (to.path === '/' && isAdmin) {
+    next('/admin')
+    return
+  }
   if (to.meta.requiresAuth && !isAuthenticated) {
     next('/login')
   } else if (to.meta.requiresAdmin && !isAdmin) {
@@ -105,5 +109,6 @@ router.beforeEach((to, from, next) => {
     next()
   }
 })
+
 
 export default router

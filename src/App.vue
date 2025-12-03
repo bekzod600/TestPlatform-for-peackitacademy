@@ -10,8 +10,5 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- <Button color="primary">
-      Primary Button
-  </Button> -->
   <router-view />
 </template>
