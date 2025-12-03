@@ -189,6 +189,20 @@ const formatTime = (seconds) => {
 }
 
 const startTimer = async () => {
+  // User group'ni olish va vaqt oralig'ini tekshirish
+  await usersStore.loadUserGroups()
+  const userGroup = usersStore.userGroups.find(
+    g => g.id === currentUser.value?.assigned_user_group
+  )
+
+  // Vaqt tekshiruvi
+  const availability = usersStore.checkTestAvailability(userGroup)
+  if (!availability.available) {
+    alert(`⚠️ ${availability.reason}`)
+    router.push('/')
+    return
+  }
+
   // Question group ma'lumotlarini olish
   const questionGroups = await questionsStore.loadQuestionGroups()
   const questionGroup = questionGroups.find(qg => qg.id === currentUser.value?.assigned_question_group)
@@ -214,6 +228,16 @@ const startTimer = async () => {
       clearInterval(timerInterval)
       alert('⏰ Vaqt tugadi! Test avtomatik yakunlanadi.')
       finishTestAutomatically('Vaqt tugadi')
+    }
+
+    // Har 60 sekundda test vaqti oralig'ini tekshirish
+    if (timeRemaining.value % 60 === 0) {
+      const check = usersStore.checkTestAvailability(userGroup)
+      if (!check.available && check.reason === 'Test vaqti tugadi') {
+        clearInterval(timerInterval)
+        alert('⏰ Test vaqti oralig\'i tugadi! Test avtomatik yakunlanadi.')
+        finishTestAutomatically('Test vaqti oralig\'i tugadi')
+      }
     }
   }, 1000)
 }

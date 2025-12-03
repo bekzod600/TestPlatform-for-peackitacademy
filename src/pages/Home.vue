@@ -123,6 +123,33 @@ const startTest = async () => {
 
   loading.value = true
   try {
+    // User group'ni topish
+    await usersStore.loadUserGroups()
+    const userGroup = usersStore.userGroups.find(
+      g => g.id === currentUser.value.assigned_user_group
+    )
+
+    // Vaqt oralig'ini tekshirish
+    const availability = usersStore.checkTestAvailability(userGroup)
+    
+    if (!availability.available) {
+      if (availability.reason === 'Test hali boshlanmagan') {
+        const startTime = new Date(availability.startTime).toLocaleString('uz-UZ', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        })
+        showSnackbar(`Test ${startTime} da boshlanadi`, 'warning')
+      } else if (availability.reason === 'Test vaqti tugadi') {
+        showSnackbar("Test vaqti tugagan! Admin bilan bog'laning.", 'error')
+      } else {
+        showSnackbar(availability.reason, 'warning')
+      }
+      return
+    }
+
     const allQuestions = await questionsStore.loadQuestions()
     const allQuestionGroups = await questionsStore.loadQuestionGroups()
     

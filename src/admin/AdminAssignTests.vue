@@ -1,6 +1,5 @@
 <template>
   <div class="space-y-4 sm:space-y-6 lg:space-y-8">
-    <!-- Page header -->
     <div class="flex flex-col gap-2 sm:gap-4">
       <h2 class="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 flex items-center gap-2">
         <i class="mdi mdi-link-variant text-blue-600 text-2xl sm:text-3xl lg:text-4xl"></i>
@@ -8,7 +7,6 @@
       </h2>
     </div>
 
-    <!-- Main grid - Responsive -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
       <!-- LEFT: Groups list -->
       <div class="bg-white rounded-xl shadow-lg p-3 sm:p-4 lg:p-6">
@@ -34,6 +32,28 @@
                   <i class="mdi mdi-account-multiple text-xs"></i>
                   {{ getStudentCount(group.id) }} ta student
                 </p>
+                
+                <!-- Test vaqti ko'rsatish -->
+                <div v-if="group.test_start_time && group.test_end_time" class="mt-2 text-xs text-gray-600">
+                  <div class="flex items-center gap-1">
+                    <i class="mdi mdi-calendar-clock"></i>
+                    <span>{{ formatDateTime(group.test_start_time) }}</span>
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <i class="mdi mdi-arrow-down"></i>
+                    <span>{{ formatDateTime(group.test_end_time) }}</span>
+                  </div>
+                  
+                  <!-- Status badge -->
+                  <div class="mt-1">
+                    <span 
+                      class="px-2 py-0.5 rounded text-xs font-medium"
+                      :class="getTestStatusClass(group)"
+                    >
+                      {{ getTestStatus(group) }}
+                    </span>
+                  </div>
+                </div>
               </div>
 
               <span
@@ -50,7 +70,6 @@
             </div>
           </div>
 
-          <!-- Empty state -->
           <div v-if="userGroups.length === 0" class="text-center py-6 sm:py-8">
             <i class="mdi mdi-account-group-outline text-4xl sm:text-5xl text-gray-300 mb-2 block"></i>
             <p class="text-gray-500 text-xs sm:text-sm">Hozircha guruhlar yo'q</p>
@@ -60,7 +79,6 @@
 
       <!-- RIGHT: Assign test -->
       <div class="space-y-3 sm:space-y-4 lg:space-y-6">
-        <!-- Select test card -->
         <div class="bg-white rounded-xl shadow-lg p-3 sm:p-4 lg:p-6"
              :class="!selectedGroup ? 'opacity-60 pointer-events-none' : ''">
 
@@ -75,13 +93,12 @@
           </div>
 
           <div v-else class="space-y-3 sm:space-y-4">
-            <!-- Selected group box -->
             <div class="bg-green-50 text-green-700 p-3 sm:p-4 rounded-lg border border-green-200">
               <strong class="text-xs sm:text-sm font-semibold block mb-1">Tanlangan guruh:</strong>
               <p class="text-xs sm:text-sm line-clamp-2">{{ selectedGroup.name }}</p>
             </div>
 
-            <!-- Select test group dropdown -->
+            <!-- Select test group -->
             <div>
               <label class="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
                 Test guruhini tanlang
@@ -96,9 +113,48 @@
                   :key="qg.id" :value="qg.id"
                   class="text-xs sm:text-sm"
                 >
-                  {{ qg.name }} — ({{ getQuestionCount(qg.id) }} ta savol)
+                  {{ qg.name }} — ({{ getQuestionCount(qg.id) }} ta savol, {{ qg.duration_minutes || 60 }} daqiqa)
                 </option>
               </select>
+            </div>
+
+            <!-- Time range inputs -->
+            <div class="space-y-3 border-t pt-3">
+              <p class="text-xs sm:text-sm font-medium text-gray-700">
+                <i class="mdi mdi-calendar-clock text-blue-600"></i>
+                Test amal qilish vaqti
+              </p>
+              
+              <div>
+                <label class="block text-xs text-gray-600 mb-1">
+                  Boshlanish vaqti
+                </label>
+                <input
+                  v-model="testStartTime"
+                  type="datetime-local"
+                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs sm:text-sm"
+                  required
+                />
+              </div>
+
+              <div>
+                <label class="block text-xs text-gray-600 mb-1">
+                  Tugash vaqti
+                </label>
+                <input
+                  v-model="testEndTime"
+                  type="datetime-local"
+                  class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none text-xs sm:text-sm"
+                  required
+                />
+              </div>
+
+              <!-- Time validation warning -->
+              <div v-if="testStartTime && testEndTime && !isValidTimeRange" 
+                   class="bg-red-50 border border-red-200 text-red-700 p-2 rounded text-xs flex items-start gap-2">
+                <i class="mdi mdi-alert flex-shrink-0 mt-0.5"></i>
+                <span>Tugash vaqti boshlanish vaqtidan kechroq bo'lishi kerak!</span>
+              </div>
             </div>
 
             <!-- Warning -->
@@ -113,7 +169,7 @@
             <!-- Button -->
             <button
               @click="assignTest"
-              :disabled="assigning || !selectedQuestionGroup"
+              :disabled="assigning || !selectedQuestionGroup || !testStartTime || !testEndTime || !isValidTimeRange"
               class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 sm:py-2.5 lg:py-3 rounded-lg transition disabled:bg-gray-400 disabled:cursor-not-allowed text-xs sm:text-sm lg:text-base font-medium flex items-center justify-center gap-2"
             >
               <i class="mdi" :class="assigning ? 'mdi-loading mdi-spin' : 'mdi-link-variant'"></i>
@@ -158,7 +214,6 @@
               </span>
             </div>
 
-            <!-- Empty state -->
             <div
               v-if="getGroupStudents(selectedGroup.id).length === 0"
               class="p-6 sm:p-8 text-center text-gray-500 border border-dashed border-gray-300 rounded-lg"
@@ -185,7 +240,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useUsersStore } from '../stores/users'
 import { useQuestionsStore } from '../stores/questions'
 
@@ -199,13 +254,21 @@ const questions = ref([])
 
 const selectedGroup = ref(null)
 const selectedQuestionGroup = ref(null)
+const testStartTime = ref('')
+const testEndTime = ref('')
 const assigning = ref(false)
 const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
 
+const isValidTimeRange = computed(() => {
+  if (!testStartTime.value || !testEndTime.value) return true
+  return new Date(testEndTime.value) > new Date(testStartTime.value)
+})
+
 onMounted(async () => {
   await loadData()
+  setDefaultTimes()
 })
 
 const loadData = async () => {
@@ -215,9 +278,65 @@ const loadData = async () => {
   questions.value = await questionsStore.loadQuestions()
 }
 
+const setDefaultTimes = () => {
+  const now = new Date()
+  const tomorrow = new Date(now)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  
+  // Format: YYYY-MM-DDTHH:MM
+  testStartTime.value = formatDateTimeLocal(now)
+  testEndTime.value = formatDateTimeLocal(tomorrow)
+}
+
+const formatDateTimeLocal = (date) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+const formatDateTime = (dateString) => {
+  const date = new Date(dateString)
+  return date.toLocaleString('uz-UZ', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const getTestStatus = (group) => {
+  if (!group.test_start_time || !group.test_end_time) return ''
+  
+  const now = new Date()
+  const start = new Date(group.test_start_time)
+  const end = new Date(group.test_end_time)
+  
+  if (now < start) return 'Hali boshlanmagan'
+  if (now > end) return 'Tugagan'
+  return 'Aktiv'
+}
+
+const getTestStatusClass = (group) => {
+  const status = getTestStatus(group)
+  if (status === 'Aktiv') return 'bg-green-100 text-green-700'
+  if (status === 'Tugagan') return 'bg-red-100 text-red-700'
+  return 'bg-blue-100 text-blue-700'
+}
+
 const selectGroup = (group) => {
   selectedGroup.value = group
   selectedQuestionGroup.value = group.assigned_question_group || null
+  
+  if (group.test_start_time && group.test_end_time) {
+    testStartTime.value = formatDateTimeLocal(new Date(group.test_start_time))
+    testEndTime.value = formatDateTimeLocal(new Date(group.test_end_time))
+  } else {
+    setDefaultTimes()
+  }
 }
 
 const getStudentCount = (groupId) => {
@@ -233,21 +352,34 @@ const getQuestionCount = (groupId) => {
 }
 
 const assignTest = async () => {
-  if (!selectedGroup.value || !selectedQuestionGroup.value) {
-    showSnackbar('Guruh va testni tanlang!', 'error')
+  if (!selectedGroup.value || !selectedQuestionGroup.value || !testStartTime.value || !testEndTime.value) {
+    showSnackbar('Barcha maydonlarni to\'ldiring!', 'error')
+    return
+  }
+
+  if (!isValidTimeRange.value) {
+    showSnackbar('Vaqt oralig\'i noto\'g\'ri!', 'error')
     return
   }
 
   assigning.value = true
 
   try {
+    const startISO = new Date(testStartTime.value).toISOString()
+    const endISO = new Date(testEndTime.value).toISOString()
+    
     const success = await usersStore.assignTestToGroup(
       selectedGroup.value.id,
-      selectedQuestionGroup.value
+      selectedQuestionGroup.value,
+      startISO,
+      endISO
     )
 
     if (success) {
-      showSnackbar(`Test ${selectedGroup.value.name} guruhiga muvaffaqiyatli biriktirildi! ${getStudentCount(selectedGroup.value.id)} ta student test oldi.`, 'success')
+      showSnackbar(
+        `Test ${selectedGroup.value.name} guruhiga muvaffaqiyatli biriktirildi! ${getStudentCount(selectedGroup.value.id)} ta student test oldi.`, 
+        'success'
+      )
       
       await loadData()
       

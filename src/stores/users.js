@@ -198,11 +198,15 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
   
-  const assignTestToGroup = async (userGroupId, questionGroupId) => {
+  const assignTestToGroup = async (userGroupId, questionGroupId, startTime, endTime) => {
     try {
       const { error: groupError } = await supabase
         .from('user_groups')
-        .update({ assigned_question_group: questionGroupId })
+        .update({ 
+          assigned_question_group: questionGroupId,
+          test_start_time: startTime,
+          test_end_time: endTime
+        })
         .eq('id', userGroupId)
 
       if (groupError) throw groupError
@@ -241,6 +245,34 @@ export const useUsersStore = defineStore('users', () => {
       console.error('Error assigning test to group:', error)
       return false
     }
+  }
+
+  const checkTestAvailability = (userGroup) => {
+    if (!userGroup || !userGroup.test_start_time || !userGroup.test_end_time) {
+      return { available: false, reason: 'Test vaqti belgilanmagan' }
+    }
+
+    const now = new Date()
+    const startTime = new Date(userGroup.test_start_time)
+    const endTime = new Date(userGroup.test_end_time)
+
+    if (now < startTime) {
+      return { 
+        available: false, 
+        reason: 'Test hali boshlanmagan',
+        startTime: startTime
+      }
+    }
+
+    if (now > endTime) {
+      return { 
+        available: false, 
+        reason: 'Test vaqti tugadi',
+        endTime: endTime
+      }
+    }
+
+    return { available: true }
   }
 
   const startTest = async (userId) => {
@@ -320,6 +352,7 @@ export const useUsersStore = defineStore('users', () => {
     editUser,
     deleteUser,
     assignTestToGroup,
+    checkTestAvailability,
     startTest,
     saveTestResult
   }
