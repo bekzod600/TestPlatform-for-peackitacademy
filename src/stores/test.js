@@ -27,7 +27,9 @@ export const useTestStore = defineStore('test', () => {
     return correct
   })
 
-  const totalQuestions = computed(() => assignedQuestions.value.length)
+  const totalQuestions = computed(() => {
+    return assignedQuestions.value.length
+  })
 
   const percentage = computed(() => {
     if (totalQuestions.value === 0) return 0

@@ -1,5 +1,6 @@
 <template>
   <div class="min-h-screen bg-gray-100" @contextmenu.prevent @copy.prevent @cut.prevent @paste.prevent>
+    <!-- Navbar -->
     <nav class="bg-blue-600 text-white shadow-md px-4 py-3">
       <div class="flex justify-between items-center max-w-7xl mx-auto">
         <div class="flex items-center space-x-2">
@@ -7,15 +8,6 @@
         </div>
 
         <div class="flex items-center space-x-4">
-          <!-- Timer -->
-          <div 
-            class="flex items-center bg-white px-4 py-2 rounded-full shadow-sm"
-            :class="timeRemaining <= 300 ? 'text-red-600' : 'text-blue-700'"
-          >
-            <i class="mdi mdi-clock-outline mr-2"></i>
-            <span class="font-bold text-lg">{{ formatTime(timeRemaining) }}</span>
-          </div>
-
           <span class="flex items-center bg-white text-blue-700 px-3 py-1 rounded-full shadow-sm">
             {{ currentUser?.full_name }}
           </span>
@@ -23,11 +15,18 @@
       </div>
     </nav>
 
+    <!-- Main Area -->
     <div class="max-w-4xl mx-auto py-10 px-4">
-      <div v-if="!testStore.isTestActive" class="bg-white rounded-2xl shadow-lg p-12 text-center">
+
+      <!-- Test topilmadi -->
+      <div v-if="!testStore.isTestActive"
+           class="bg-white rounded-2xl shadow-lg p-12 text-center">
+        
         <div class="text-yellow-500 text-7xl mb-6">⚠️</div>
+
         <h2 class="text-3xl font-bold mb-4">Test topilmadi</h2>
         <p class="text-gray-600 mb-6">Iltimos, avval testni boshlang.</p>
+
         <button
           @click="goHome"
           class="bg-blue-600 text-white px-6 py-3 rounded-xl shadow hover:bg-blue-700 transition"
@@ -36,7 +35,10 @@
         </button>
       </div>
 
+      <!-- Test Active -->
       <div v-else class="bg-white rounded-2xl shadow-lg overflow-hidden">
+
+        <!-- Title Bar -->
         <div class="bg-blue-600 text-white p-6">
           <div class="flex flex-col sm:flex-row justify-between items-center">
             <div class="text-xl font-semibold mb-3 sm:mb-0">
@@ -49,6 +51,7 @@
           </div>
         </div>
 
+        <!-- Progress Bar -->
         <div class="w-full bg-gray-200 h-2">
           <div
             class="bg-green-500 h-2 transition-all duration-300"
@@ -56,12 +59,14 @@
           ></div>
         </div>
 
+        <!-- Question -->
         <div class="p-8">
           <div v-if="currentQuestion">
             <div class="bg-gray-100 p-5 rounded-lg text-lg font-semibold mb-6">
               {{ currentQuestion.question }}
             </div>
 
+            <!-- Answers -->
             <div class="space-y-4">
               <div v-for="(answer, index) in currentQuestion.answers"
                    :key="index"
@@ -85,6 +90,7 @@
           </div>
         </div>
 
+        <!-- Action Buttons -->
         <div class="border-t p-6 flex justify-between">
           <button
             @click="previousQuestion"
@@ -105,14 +111,18 @@
           <button
             v-else
             @click="showFinishDialog = true"
-            class="px-6 py-3 rounded-lg shadow bg-green-600 text-white hover:bg-green-700 transition"
+            :disabled="finishingTest"
+            class="px-6 py-3 rounded-lg shadow bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            ✓ Yakunlash
+            <i v-if="finishingTest" class="mdi mdi-loading mdi-spin"></i>
+            <i v-else class="mdi mdi-check"></i>
+            {{ finishingTest ? 'Saqlanmoqda...' : 'Yakunlash' }}
           </button>
         </div>
       </div>
     </div>
 
+    <!-- Finish Modal -->
     <div v-if="showFinishDialog"
          class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50">
       <div class="bg-white w-full max-w-md rounded-2xl shadow-xl p-6">
@@ -129,19 +139,23 @@
         <div class="flex justify-end space-x-3">
           <button
             @click="showFinishDialog = false"
-            class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition">
+            :disabled="finishingTest"
+            class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition disabled:opacity-50">
             Bekor qilish
           </button>
 
           <button
             @click="finishTest"
-            class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition">
-            Ha, yakunlash
+            :disabled="finishingTest"
+            class="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+            <i v-if="finishingTest" class="mdi mdi-loading mdi-spin"></i>
+            {{ finishingTest ? 'Saqlanmoqda...' : 'Ha, yakunlash' }}
           </button>
         </div>
       </div>
     </div>
 
+    <!-- Tab Switch Warning -->
     <div v-if="showTabWarning"
          class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-red-600 text-white px-6 py-3 rounded-lg shadow-lg z-50">
       ⚠️ Ogohlantirish {{ tabSwitchCount }}/3: Tab almashtirmang!
@@ -154,12 +168,10 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUsersStore } from '../stores/users'
 import { useTestStore } from '../stores/test'
-import { useQuestionsStore } from '../stores/questions'
 
 const router = useRouter()
 const usersStore = useUsersStore()
 const testStore = useTestStore()
-const questionsStore = useQuestionsStore()
 
 const currentUser = computed(() => usersStore.currentUser)
 const currentIndex = computed(() => testStore.currentIndex)
@@ -167,90 +179,31 @@ const totalQuestions = computed(() => testStore.totalQuestions)
 const currentQuestion = computed(() => testStore.assignedQuestions[testStore.currentIndex])
 const selectedAnswers = computed(() => testStore.selectedAnswers)
 const showFinishDialog = ref(false)
+const finishingTest = ref(false)
+const testStartTime = ref(new Date().toISOString())
 
 const answeredCount = computed(() => {
   return Object.keys(selectedAnswers.value).length
 })
 
-// Timer
-const timeRemaining = ref(0)
-let timerInterval = null
-
-// Tab switch himoya
+// 🔒 HIMOYA: Tab almashtirish
 const tabSwitchCount = ref(0)
 const maxTabSwitches = 3
 const showTabWarning = ref(false)
 let devToolsCheck = null
+let selectionStyle = null
 
-const formatTime = (seconds) => {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-}
-
-const startTimer = async () => {
-  // User group'ni olish va vaqt oralig'ini tekshirish
-  await usersStore.loadUserGroups()
-  const userGroup = usersStore.userGroups.find(
-    g => g.id === currentUser.value?.assigned_user_group
-  )
-
-  // Vaqt tekshiruvi
-  const availability = usersStore.checkTestAvailability(userGroup)
-  if (!availability.available) {
-    alert(`⚠️ ${availability.reason}`)
-    router.push('/')
-    return
-  }
-
-  // Question group ma'lumotlarini olish
-  const questionGroups = await questionsStore.loadQuestionGroups()
-  const questionGroup = questionGroups.find(qg => qg.id === currentUser.value?.assigned_question_group)
-  
-  const durationMinutes = questionGroup?.duration_minutes || 60
-  
-  // Test boshlangan vaqtni olish
-  const startedAt = currentUser.value?.test_started_at
-  
-  if (!startedAt) {
-    timeRemaining.value = durationMinutes * 60
-  } else {
-    const startTime = new Date(startedAt).getTime()
-    const currentTime = new Date().getTime()
-    const elapsedSeconds = Math.floor((currentTime - startTime) / 1000)
-    timeRemaining.value = Math.max(0, (durationMinutes * 60) - elapsedSeconds)
-  }
-  
-  timerInterval = setInterval(() => {
-    timeRemaining.value--
-    
-    if (timeRemaining.value <= 0) {
-      clearInterval(timerInterval)
-      alert('⏰ Vaqt tugadi! Test avtomatik yakunlanadi.')
-      finishTestAutomatically('Vaqt tugadi')
-    }
-
-    // Har 60 sekundda test vaqti oralig'ini tekshirish
-    if (timeRemaining.value % 60 === 0) {
-      const check = usersStore.checkTestAvailability(userGroup)
-      if (!check.available && check.reason === 'Test vaqti tugadi') {
-        clearInterval(timerInterval)
-        alert('⏰ Test vaqti oralig\'i tugadi! Test avtomatik yakunlanadi.')
-        finishTestAutomatically('Test vaqti oralig\'i tugadi')
-      }
-    }
-  }, 1000)
-}
-
+// 🔒 HIMOYA: Developer Tools
 const checkDevTools = () => {
   const threshold = 160
   if (window.outerWidth - window.innerWidth > threshold || 
       window.outerHeight - window.innerHeight > threshold) {
     alert('⚠️ Developer Tools aniqlandi! Test yakunlanadi.')
-    finishTestAutomatically('Developer Tools aniqlandi')
+    finishTestAutomatically()
   }
 }
 
+// 🔒 HIMOYA: Tab o'zgarganda
 const handleVisibilityChange = () => {
   if (document.hidden && testStore.isTestActive) {
     tabSwitchCount.value++
@@ -262,11 +215,12 @@ const handleVisibilityChange = () => {
     
     if (tabSwitchCount.value >= maxTabSwitches) {
       alert(`⚠️ Siz ${maxTabSwitches} marta tab almashtiringiz! Test avtomatik yakunlanadi.`)
-      finishTestAutomatically('Qoidabuzarlik aniqlandi')
+      finishTestAutomatically()
     }
   }
 }
 
+// 🔒 HIMOYA: Screenshot
 const preventScreenshot = (e) => {
   if ((e.key === 'PrintScreen') || 
       (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) ||
@@ -277,6 +231,7 @@ const preventScreenshot = (e) => {
   }
 }
 
+// 🔒 HIMOYA: F12, Ctrl+Shift+I
 const preventDevTools = (e) => {
   if (e.key === 'F12' || 
       (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
@@ -287,6 +242,7 @@ const preventDevTools = (e) => {
   }
 }
 
+// 🔒 HIMOYA: Matnni tanlash
 const preventSelection = () => {
   const selectionStyle = document.createElement('style')
   selectionStyle.textContent = `
@@ -306,21 +262,24 @@ const preventSelection = () => {
   document.head.appendChild(selectionStyle)
 }
 
-const finishTestAutomatically = async (reason) => {
-  if (timerInterval) {
-    clearInterval(timerInterval)
-  }
+// 🔒 Test avtomatik yakunlash
+const finishTestAutomatically = async () => {
+  if (finishingTest.value) return
   
+  finishingTest.value = true
   testStore.finishTest()
+  
+  const testEndTime = new Date().toISOString()
   
   const testResult = {
     group_id: currentQuestion.value?.group_id || currentUser.value?.assigned_question_group,
-    group_name: 'Test guruhi',
     score: testStore.score,
     total_questions: testStore.totalQuestions,
     percentage: testStore.percentage,
-    completed_at: new Date().toISOString(),
-    finished_reason: reason
+    test_started_at: testStartTime.value,
+    test_ended_at: testEndTime,
+    completed_at: testEndTime,
+    finished_reason: 'Qoidabuzarlik aniqlandi'
   }
   
   await usersStore.saveTestResult(currentUser.value.id, testResult)
@@ -329,26 +288,23 @@ const finishTestAutomatically = async (reason) => {
 
 onMounted(() => {
   preventSelection()
-  startTimer()
   
   document.addEventListener('visibilitychange', handleVisibilityChange)
   document.addEventListener('keydown', preventScreenshot)
   document.addEventListener('keydown', preventDevTools)
   
   devToolsCheck = setInterval(checkDevTools, 1000)
+  
 })
 
 onUnmounted(() => {
-  if (timerInterval) {
-    clearInterval(timerInterval)
-  }
-  
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   document.removeEventListener('keydown', preventScreenshot)
   document.removeEventListener('keydown', preventDevTools)
-  
-  if (devToolsCheck) {
-    clearInterval(devToolsCheck)
+  clearInterval(devToolsCheck)
+
+  if (selectionStyle) {
+    selectionStyle.remove()
   }
 })
 
@@ -365,24 +321,30 @@ const nextQuestion = () => {
 }
 
 const finishTest = async () => {
-  if (timerInterval) {
-    clearInterval(timerInterval)
-  }
+  if (finishingTest.value) return
   
+  finishingTest.value = true
   testStore.finishTest()
+  
+  const testEndTime = new Date().toISOString()
   
   const testResult = {
     group_id: currentQuestion.value?.group_id || currentUser.value?.assigned_question_group,
-    group_name: 'Test guruhi',
     score: testStore.score,
     total_questions: testStore.totalQuestions,
     percentage: testStore.percentage,
-    completed_at: new Date().toISOString()
+    test_started_at: testStartTime.value,
+    test_ended_at: testEndTime,
+    completed_at: testEndTime
   }
   
-  await usersStore.saveTestResult(currentUser.value.id, testResult)
-  
-  router.push('/results')
+  try {
+    await usersStore.saveTestResult(currentUser.value.id, testResult)
+    router.push('/results')
+  } catch (error) {
+    console.error('Error saving test result:', error)
+    finishingTest.value = false
+  }
 }
 
 const goHome = () => {
