@@ -188,7 +188,6 @@ const currentQuestion = computed(() => testStore.assignedQuestions[testStore.cur
 const selectedAnswers = computed(() => testStore.selectedAnswers)
 const showFinishDialog = ref(false)
 const finishingTest = ref(false)
-const testStartTime = ref(new Date().toISOString())
 
 // Vaqt uchun
 const timeRemaining = ref(0)
@@ -211,26 +210,18 @@ let devToolsCheck = null
 let selectionStyle = null
 
 // Timer boshlash
-const startTimer = async () => {
-  // Question group ma'lumotlarini olish
-  const groupId = currentUser.value?.assigned_question_group
+const startTimer = () => {
+  // Store'dan vaqtni olish
+  timeRemaining.value = testStore.timeRemaining || testStore.testDuration
   
-  if (groupId) {
-    await questionsStore.loadQuestionGroups()
-    const group = questionsStore.questionGroups.find(g => g.id === groupId)
-    
-    if (group && group.duration_minutes) {
-      timeRemaining.value = group.duration_minutes * 60 // daqiqani sekundga
-    } else {
-      timeRemaining.value = 1800 // default 30 daqiqa
-    }
-  } else {
+  if (timeRemaining.value === 0) {
     timeRemaining.value = 1800 // default 30 daqiqa
   }
   
   timerInterval = setInterval(() => {
     if (timeRemaining.value > 0) {
       timeRemaining.value--
+      testStore.updateTimeRemaining(timeRemaining.value)
     } else {
       // Vaqt tugadi
       clearInterval(timerInterval)
@@ -324,7 +315,7 @@ const finishTestAutomatically = async () => {
     score: testStore.score,
     total_questions: testStore.totalQuestions,
     percentage: testStore.percentage,
-    test_started_at: testStartTime.value,
+    test_started_at: testStore.testStartTime,
     test_ended_at: testEndTime,
     completed_at: testEndTime,
     finished_reason: 'Qoidabuzarlik aniqlandi'
@@ -334,12 +325,20 @@ const finishTestAutomatically = async () => {
   router.push('/results')
 }
 
-onMounted(async () => {
+onMounted(() => {
+  // Avval saqlangan holatni yuklash
+  const hasState = testStore.loadTestState()
+  
+  if (!hasState && !testStore.isTestActive) {
+    // Agar hech qanday holatni bo'lmasa, bosh sahifaga qaytarish
+    console.log('No active test found')
+  }
+  
   preventSelection()
   
   // Timer boshlash
   if (testStore.isTestActive) {
-    await startTimer()
+    startTimer()
   }
   
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -387,7 +386,7 @@ const finishTest = async () => {
     score: testStore.score,
     total_questions: testStore.totalQuestions,
     percentage: testStore.percentage,
-    test_started_at: testStartTime.value,
+    test_started_at: testStore.testStartTime,
     test_ended_at: testEndTime,
     completed_at: testEndTime
   }

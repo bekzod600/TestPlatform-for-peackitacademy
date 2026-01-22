@@ -1,9 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { supabase } from '../lib/supabase' // ← qo'shildi
+import { supabase } from '../lib/supabase'
 
 function shuffleArray(arr) {
-  // non-mutating copy
   const a = [...arr]
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -18,6 +17,8 @@ export const useTestStore = defineStore('test', () => {
   const currentIndex = ref(0)
   const isTestActive = ref(false)
   const testDuration = ref(0)
+  const testStartTime = ref(null)
+  const timeRemaining = ref(0)
 
   const score = computed(() => {
     let correct = 0
@@ -38,13 +39,57 @@ export const useTestStore = defineStore('test', () => {
     return Math.round((score.value / totalQuestions.value) * 100)
   })
 
-  const startTest = async (questions = [], opts = {}) => { // ← async qo'shildi
-    const { maxQuestions = 50, shuffleQuestions = true, shuffleAnswers = true, groupId = null } = opts // ← groupId qo'shildi
+  // LocalStorage'dan test holatini yuklash
+  const loadTestState = () => {
+    try {
+      const savedState = localStorage.getItem('activeTest')
+      if (savedState) {
+        const state = JSON.parse(savedState)
+        assignedQuestions.value = state.assignedQuestions || []
+        selectedAnswers.value = state.selectedAnswers || {}
+        currentIndex.value = state.currentIndex || 0
+        isTestActive.value = state.isTestActive || false
+        testDuration.value = state.testDuration || 0
+        testStartTime.value = state.testStartTime || null
+        timeRemaining.value = state.timeRemaining || 0
+        
+        return true
+      }
+      return false
+    } catch (error) {
+      console.error('Error loading test state:', error)
+      return false
+    }
+  }
 
-    // ensure we have array
+  // LocalStorage'ga test holatini saqlash
+  const saveTestState = () => {
+    try {
+      const state = {
+        assignedQuestions: assignedQuestions.value,
+        selectedAnswers: selectedAnswers.value,
+        currentIndex: currentIndex.value,
+        isTestActive: isTestActive.value,
+        testDuration: testDuration.value,
+        testStartTime: testStartTime.value,
+        timeRemaining: timeRemaining.value
+      }
+      localStorage.setItem('activeTest', JSON.stringify(state))
+    } catch (error) {
+      console.error('Error saving test state:', error)
+    }
+  }
+
+  // Test holatini o'chirish
+  const clearTestState = () => {
+    localStorage.removeItem('activeTest')
+  }
+
+  const startTest = async (questions = [], opts = {}) => {
+    const { maxQuestions = 50, shuffleQuestions = true, shuffleAnswers = true, groupId = null } = opts
+
     let pool = Array.isArray(questions) ? [...questions] : []
 
-    // normalize answers: if answers field is a JSON string, parse it
     pool = pool.map(q => {
       const answers = typeof q.answers === 'string' ? JSON.parse(q.answers) : q.answers
       return { ...q, answers: answers || [], correct: Number(q.correct) }
@@ -54,12 +99,9 @@ export const useTestStore = defineStore('test', () => {
       pool = shuffleArray(pool)
     }
 
-    // limit to maxQuestions
     pool = pool.slice(0, maxQuestions)
 
-    // shuffle answers for each question and recalc correct index
     const prepared = pool.map(q => {
-      // keep original index for reference
       const answersWithIndex = q.answers.map((a, i) => ({ text: a, origIndex: i }))
       const shuffledAnswers = shuffleAnswers ? shuffleArray(answersWithIndex) : answersWithIndex
       const newAnswers = shuffledAnswers.map(x => x.text)
@@ -67,12 +109,11 @@ export const useTestStore = defineStore('test', () => {
       return {
         ...q,
         answers: newAnswers,
-        correct: newCorrect >= 0 ? newCorrect : 0 // fallback
+        correct: newCorrect >= 0 ? newCorrect : 0
       }
     })
 
-    // ← to'g'ri joy - prepared array yaratilgandan KEYIN
-    if (groupId) { // ← groupId mavjudligini tekshirish
+    if (groupId) {
       try {
         const { data: groupData, error } = await supabase
           .from('question_groups')
@@ -83,46 +124,63 @@ export const useTestStore = defineStore('test', () => {
         if (error) throw error
         
         if (groupData && groupData.duration_minutes) {
-          testDuration.value = groupData.duration_minutes * 60 // daqiqani sekundga
+          testDuration.value = groupData.duration_minutes * 60
+          timeRemaining.value = groupData.duration_minutes * 60
         } else {
-          testDuration.value = 1800 // default 30 daqiqa
+          testDuration.value = 1800
+          timeRemaining.value = 1800
         }
       } catch (error) {
         console.error('Error loading test duration:', error)
-        testDuration.value = 1800 // default 30 daqiqa
+        testDuration.value = 1800
+        timeRemaining.value = 1800
       }
     } else {
-      testDuration.value = 1800 // default 30 daqiqa
+      testDuration.value = 1800
+      timeRemaining.value = 1800
     }
 
     assignedQuestions.value = prepared
     selectedAnswers.value = {}
     currentIndex.value = 0
     isTestActive.value = prepared.length > 0
+    testStartTime.value = new Date().toISOString()
+
+    // Holatni saqlash
+    saveTestState()
   }
 
   const selectAnswer = (questionId, answerIndex) => {
-    // ensure reactivity by replacing object
     selectedAnswers.value = {
       ...selectedAnswers.value,
       [questionId]: answerIndex
     }
+    // Har safar javob tanlaganda saqlash
+    saveTestState()
   }
 
   const nextQuestion = () => {
     if (currentIndex.value < assignedQuestions.value.length - 1) {
       currentIndex.value++
+      saveTestState()
     }
   }
 
   const previousQuestion = () => {
     if (currentIndex.value > 0) {
       currentIndex.value--
+      saveTestState()
     }
+  }
+
+  const updateTimeRemaining = (time) => {
+    timeRemaining.value = time
+    saveTestState()
   }
 
   const finishTest = () => {
     isTestActive.value = false
+    clearTestState()
   }
 
   const resetTest = () => {
@@ -131,6 +189,9 @@ export const useTestStore = defineStore('test', () => {
     currentIndex.value = 0
     isTestActive.value = false
     testDuration.value = 0
+    testStartTime.value = null
+    timeRemaining.value = 0
+    clearTestState()
   }
 
   return {
@@ -141,12 +202,18 @@ export const useTestStore = defineStore('test', () => {
     score,
     totalQuestions,
     percentage,
+    testStartTime,
+    timeRemaining,
     startTest,
     selectAnswer,
     nextQuestion,
     previousQuestion,
     finishTest,
     resetTest,
-    testDuration
+    testDuration,
+    loadTestState,
+    saveTestState,
+    clearTestState,
+    updateTimeRemaining
   }
 })
