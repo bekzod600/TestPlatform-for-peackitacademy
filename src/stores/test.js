@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { supabase } from '../lib/supabase' // ← qo'shildi
 
 function shuffleArray(arr) {
   // non-mutating copy
@@ -37,8 +38,8 @@ export const useTestStore = defineStore('test', () => {
     return Math.round((score.value / totalQuestions.value) * 100)
   })
 
-  const startTest = (questions = [], opts = {}) => {
-    const { maxQuestions = 50, shuffleQuestions = true, shuffleAnswers = true } = opts
+  const startTest = async (questions = [], opts = {}) => { // ← async qo'shildi
+    const { maxQuestions = 50, shuffleQuestions = true, shuffleAnswers = true, groupId = null } = opts // ← groupId qo'shildi
 
     // ensure we have array
     let pool = Array.isArray(questions) ? [...questions] : []
@@ -70,14 +71,28 @@ export const useTestStore = defineStore('test', () => {
       }
     })
 
-    const { data: groupData } = await supabase
-      .from('question_groups')
-      .select('duration_minutes')
-      .eq('id', groupId)
-      .single()
-    
-    if (groupData) {
-      testDuration.value = groupData.duration_minutes * 60 // daqiqani sekundga
+    // ← to'g'ri joy - prepared array yaratilgandan KEYIN
+    if (groupId) { // ← groupId mavjudligini tekshirish
+      try {
+        const { data: groupData, error } = await supabase
+          .from('question_groups')
+          .select('duration_minutes')
+          .eq('id', groupId)
+          .single()
+        
+        if (error) throw error
+        
+        if (groupData && groupData.duration_minutes) {
+          testDuration.value = groupData.duration_minutes * 60 // daqiqani sekundga
+        } else {
+          testDuration.value = 1800 // default 30 daqiqa
+        }
+      } catch (error) {
+        console.error('Error loading test duration:', error)
+        testDuration.value = 1800 // default 30 daqiqa
+      }
+    } else {
+      testDuration.value = 1800 // default 30 daqiqa
     }
 
     assignedQuestions.value = prepared
@@ -115,6 +130,7 @@ export const useTestStore = defineStore('test', () => {
     selectedAnswers.value = {}
     currentIndex.value = 0
     isTestActive.value = false
+    testDuration.value = 0
   }
 
   return {
