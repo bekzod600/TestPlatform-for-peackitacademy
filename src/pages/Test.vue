@@ -44,6 +44,12 @@
             <div class="text-xl font-semibold mb-3 sm:mb-0">
               Savol {{ currentIndex + 1 }} / {{ totalQuestions }}
             </div>
+            
+            <!-- Vaqt ko'rsatkichi -->
+            <div class="px-4 py-1 rounded-full shadow font-bold text-lg"
+                :class="timeRemaining < 300 ? 'bg-red-500 text-white animate-pulse' : 'bg-yellow-400 text-gray-900'">
+              ⏰ {{ timeFormatted }}
+            </div>
 
             <div class="bg-white text-blue-700 px-4 py-1 rounded-full shadow">
               Javob berilgan: {{ answeredCount }} / {{ totalQuestions }}
@@ -168,10 +174,12 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUsersStore } from '../stores/users'
 import { useTestStore } from '../stores/test'
+import { useQuestionsStore } from '../stores/questions'
 
 const router = useRouter()
 const usersStore = useUsersStore()
 const testStore = useTestStore()
+const questionsStore = useQuestionsStore()
 
 const currentUser = computed(() => usersStore.currentUser)
 const currentIndex = computed(() => testStore.currentIndex)
@@ -181,6 +189,15 @@ const selectedAnswers = computed(() => testStore.selectedAnswers)
 const showFinishDialog = ref(false)
 const finishingTest = ref(false)
 const testStartTime = ref(new Date().toISOString())
+
+// Vaqt uchun
+const timeRemaining = ref(0)
+const timeFormatted = computed(() => {
+  const minutes = Math.floor(timeRemaining.value / 60)
+  const seconds = timeRemaining.value % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+})
+let timerInterval = null
 
 const answeredCount = computed(() => {
   return Object.keys(selectedAnswers.value).length
@@ -192,6 +209,36 @@ const maxTabSwitches = 3
 const showTabWarning = ref(false)
 let devToolsCheck = null
 let selectionStyle = null
+
+// Timer boshlash
+const startTimer = async () => {
+  // Question group ma'lumotlarini olish
+  const groupId = currentUser.value?.assigned_question_group
+  
+  if (groupId) {
+    await questionsStore.loadQuestionGroups()
+    const group = questionsStore.questionGroups.find(g => g.id === groupId)
+    
+    if (group && group.duration_minutes) {
+      timeRemaining.value = group.duration_minutes * 60 // daqiqani sekundga
+    } else {
+      timeRemaining.value = 1800 // default 30 daqiqa
+    }
+  } else {
+    timeRemaining.value = 1800 // default 30 daqiqa
+  }
+  
+  timerInterval = setInterval(() => {
+    if (timeRemaining.value > 0) {
+      timeRemaining.value--
+    } else {
+      // Vaqt tugadi
+      clearInterval(timerInterval)
+      alert('⏰ Vaqt tugadi! Test avtomatik yakunlanadi.')
+      finishTestAutomatically()
+    }
+  }, 1000)
+}
 
 // 🔒 HIMOYA: Developer Tools
 const checkDevTools = () => {
@@ -244,7 +291,7 @@ const preventDevTools = (e) => {
 
 // 🔒 HIMOYA: Matnni tanlash
 const preventSelection = () => {
-  const selectionStyle = document.createElement('style')
+  selectionStyle = document.createElement('style')
   selectionStyle.textContent = `
     * {
       -webkit-user-select: none !important;
@@ -267,6 +314,7 @@ const finishTestAutomatically = async () => {
   if (finishingTest.value) return
   
   finishingTest.value = true
+  clearInterval(timerInterval)
   testStore.finishTest()
   
   const testEndTime = new Date().toISOString()
@@ -286,15 +334,19 @@ const finishTestAutomatically = async () => {
   router.push('/results')
 }
 
-onMounted(() => {
+onMounted(async () => {
   preventSelection()
+  
+  // Timer boshlash
+  if (testStore.isTestActive) {
+    await startTimer()
+  }
   
   document.addEventListener('visibilitychange', handleVisibilityChange)
   document.addEventListener('keydown', preventScreenshot)
   document.addEventListener('keydown', preventDevTools)
   
   devToolsCheck = setInterval(checkDevTools, 1000)
-  
 })
 
 onUnmounted(() => {
@@ -302,6 +354,7 @@ onUnmounted(() => {
   document.removeEventListener('keydown', preventScreenshot)
   document.removeEventListener('keydown', preventDevTools)
   clearInterval(devToolsCheck)
+  clearInterval(timerInterval)
 
   if (selectionStyle) {
     selectionStyle.remove()
@@ -324,6 +377,7 @@ const finishTest = async () => {
   if (finishingTest.value) return
   
   finishingTest.value = true
+  clearInterval(timerInterval)
   testStore.finishTest()
   
   const testEndTime = new Date().toISOString()

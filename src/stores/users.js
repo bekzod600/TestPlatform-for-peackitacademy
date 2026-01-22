@@ -6,6 +6,7 @@ export const useUsersStore = defineStore('users', () => {
   const currentUser = ref(null)
   const users = ref([])
   const userGroups = ref([])
+  const testDuration = ref(0)
 
   const loadUsers = async () => {
     try {

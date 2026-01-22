@@ -16,6 +16,7 @@ export const useTestStore = defineStore('test', () => {
   const selectedAnswers = ref({})
   const currentIndex = ref(0)
   const isTestActive = ref(false)
+  const testDuration = ref(0)
 
   const score = computed(() => {
     let correct = 0
@@ -69,6 +70,16 @@ export const useTestStore = defineStore('test', () => {
       }
     })
 
+    const { data: groupData } = await supabase
+      .from('question_groups')
+      .select('duration_minutes')
+      .eq('id', groupId)
+      .single()
+    
+    if (groupData) {
+      testDuration.value = groupData.duration_minutes * 60 // daqiqani sekundga
+    }
+
     assignedQuestions.value = prepared
     selectedAnswers.value = {}
     currentIndex.value = 0
@@ -119,6 +130,7 @@ export const useTestStore = defineStore('test', () => {
     nextQuestion,
     previousQuestion,
     finishTest,
-    resetTest
+    resetTest,
+    testDuration
   }
 })
