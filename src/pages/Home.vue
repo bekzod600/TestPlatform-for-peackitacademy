@@ -288,7 +288,7 @@ const acceptRulesAndStart = async () => {
       shuffledQuestions = shuffledQuestions.slice(0, 50)
     }
     
-    testStore.startTest(shuffledQuestions)
+    await testStore.startTest(shuffledQuestions, { groupId: questionGroupId })
     router.push('/test')
   } finally {
     loading.value = false
