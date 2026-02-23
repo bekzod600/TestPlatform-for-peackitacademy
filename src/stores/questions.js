@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { supabase } from '../lib/supabase'
+import { queryDB, queryDBSingle } from '../lib/neon'
 
 export const useQuestionsStore = defineStore('questions', () => {
   const questions = ref([])
@@ -9,10 +9,7 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const loadQuestions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .order('id', { ascending: true })
+      const { data, error } = await queryDB('SELECT * FROM questions ORDER BY id ASC')
       
       if (error) throw error
       questions.value = (data || []).map(q => ({
@@ -28,10 +25,7 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const loadCategories = async () => {
     try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('id', { ascending: true })
+      const { data, error } = await queryDB('SELECT * FROM categories ORDER BY id ASC')
       
       if (error) throw error
       categories.value = data || []
@@ -44,10 +38,7 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const loadQuestionGroups = async () => {
     try {
-      const { data, error } = await supabase
-        .from('question_groups')
-        .select('*')
-        .order('id', { ascending: true })
+      const { data, error } = await queryDB('SELECT * FROM question_groups ORDER BY id ASC')
       
       if (error) throw error
       questionGroups.value = data || []
@@ -60,15 +51,20 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const addQuestionGroup = async (newGroup) => {
     try {
-      const { data, error } = await supabase
-        .from('question_groups')
-        .insert([{
-          ...newGroup,
-          duration_minutes: newGroup.duration_minutes || 60,
-          questions_count: newGroup.questions_count || 50
-        }])
-        .select()
-        .single()
+      const groupData = {
+        ...newGroup,
+        duration_minutes: newGroup.duration_minutes || 60,
+        questions_count: newGroup.questions_count || 50
+      }
+      
+      const columns = Object.keys(groupData).join(', ')
+      const values = Object.values(groupData)
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ')
+      
+      const { data, error } = await queryDBSingle(
+        `INSERT INTO question_groups (${columns}) VALUES (${placeholders}) RETURNING *`,
+        values
+      )
 
       if (error) throw error
       
@@ -82,12 +78,13 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const editQuestionGroup = async (id, updatedGroup) => {
     try {
-      const { data, error } = await supabase
-        .from('question_groups')
-        .update(updatedGroup)
-        .eq('id', id)
-        .select()
-        .single()
+      const setClauses = Object.keys(updatedGroup).map((key, i) => `${key} = $${i + 1}`).join(', ')
+      const values = Object.values(updatedGroup)
+      
+      const { data, error } = await queryDBSingle(
+        `UPDATE question_groups SET ${setClauses} WHERE id = $${values.length + 1} RETURNING *`,
+        [...values, id]
+      )
 
       if (error) throw error
 
@@ -105,10 +102,7 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const deleteQuestionGroup = async (id) => {
     try {
-      const { error } = await supabase
-        .from('question_groups')
-        .delete()
-        .eq('id', id)
+      const { error } = await queryDB('DELETE FROM question_groups WHERE id = $1', [id])
 
       if (error) throw error
 
@@ -129,11 +123,14 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const addQuestion = async (newQuestion) => {
     try {
-      const { data, error } = await supabase
-        .from('questions')
-        .insert([newQuestion])
-        .select()
-        .single()
+      const columns = Object.keys(newQuestion).join(', ')
+      const values = Object.values(newQuestion)
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ')
+      
+      const { data, error } = await queryDBSingle(
+        `INSERT INTO questions (${columns}) VALUES (${placeholders}) RETURNING *`,
+        values
+      )
 
       if (error) throw error
       
@@ -147,12 +144,13 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const editQuestion = async (id, updatedQuestion) => {
     try {
-      const { data, error } = await supabase
-        .from('questions')
-        .update(updatedQuestion)
-        .eq('id', id)
-        .select()
-        .single()
+      const setClauses = Object.keys(updatedQuestion).map((key, i) => `${key} = $${i + 1}`).join(', ')
+      const values = Object.values(updatedQuestion)
+      
+      const { data, error } = await queryDBSingle(
+        `UPDATE questions SET ${setClauses} WHERE id = $${values.length + 1} RETURNING *`,
+        [...values, id]
+      )
 
       if (error) throw error
 
@@ -170,10 +168,7 @@ export const useQuestionsStore = defineStore('questions', () => {
 
   const deleteQuestion = async (id) => {
     try {
-      const { error } = await supabase
-        .from('questions')
-        .delete()
-        .eq('id', id)
+      const { error } = await queryDB('DELETE FROM questions WHERE id = $1', [id])
 
       if (error) throw error
 

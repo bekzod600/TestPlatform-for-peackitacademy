@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { supabase } from '../lib/supabase'
+import { queryDBSingle } from '../lib/neon'
 
 function shuffleArray(arr) {
   const a = [...arr]
@@ -115,11 +115,10 @@ export const useTestStore = defineStore('test', () => {
 
     if (groupId) {
       try {
-        const { data: groupData, error } = await supabase
-          .from('question_groups')
-          .select('duration_minutes')
-          .eq('id', groupId)
-          .single()
+        const { data: groupData, error } = await queryDBSingle(
+          'SELECT duration_minutes FROM question_groups WHERE id = $1',
+          [groupId]
+        )
         
         if (error) throw error
         

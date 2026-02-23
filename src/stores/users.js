@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { supabase } from '../lib/supabase'
+import { queryDB, queryDBSingle, sql } from '../lib/neon'
 
 export const useUsersStore = defineStore('users', () => {
   const currentUser = ref(null)
@@ -10,10 +10,7 @@ export const useUsersStore = defineStore('users', () => {
 
   const loadUsers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .order('id', { ascending: true })
+      const { data, error } = await queryDB('SELECT * FROM users ORDER BY id ASC')
       
       if (error) throw error
       users.value = data || []
@@ -26,10 +23,7 @@ export const useUsersStore = defineStore('users', () => {
 
   const loadUserGroups = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user_groups')
-        .select('*')
-        .order('id', { ascending: true })
+      const { data, error } = await queryDB('SELECT * FROM user_groups ORDER BY id ASC')
       
       if (error) throw error
       userGroups.value = data || []
@@ -42,11 +36,14 @@ export const useUsersStore = defineStore('users', () => {
 
   const addUserGroup = async (newGroup) => {
     try {
-      const { data, error } = await supabase
-        .from('user_groups')
-        .insert([newGroup])
-        .select()
-        .single()
+      const columns = Object.keys(newGroup).join(', ')
+      const values = Object.values(newGroup)
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ')
+      
+      const { data, error } = await queryDBSingle(
+        `INSERT INTO user_groups (${columns}) VALUES (${placeholders}) RETURNING *`,
+        values
+      )
 
       if (error) throw error
       
@@ -60,12 +57,13 @@ export const useUsersStore = defineStore('users', () => {
 
   const editUserGroup = async (id, updatedGroup) => {
     try {
-      const { data, error } = await supabase
-        .from('user_groups')
-        .update(updatedGroup)
-        .eq('id', id)
-        .select()
-        .single()
+      const setClauses = Object.keys(updatedGroup).map((key, i) => `${key} = $${i + 1}`).join(', ')
+      const values = Object.values(updatedGroup)
+      
+      const { data, error } = await queryDBSingle(
+        `UPDATE user_groups SET ${setClauses} WHERE id = $${values.length + 1} RETURNING *`,
+        [...values, id]
+      )
 
       if (error) throw error
 
@@ -83,10 +81,7 @@ export const useUsersStore = defineStore('users', () => {
 
   const deleteUserGroup = async (id) => {
     try {
-      const { error } = await supabase
-        .from('user_groups')
-        .delete()
-        .eq('id', id)
+      const { error } = await queryDB('DELETE FROM user_groups WHERE id = $1', [id])
 
       if (error) throw error
 
@@ -103,12 +98,10 @@ export const useUsersStore = defineStore('users', () => {
 
   const login = async (username, password) => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .eq('password', password)
-        .single()
+      const { data, error } = await queryDBSingle(
+        'SELECT * FROM users WHERE username = $1 AND password = $2',
+        [username, password]
+      )
 
       if (error || !data) return null
 
@@ -135,11 +128,14 @@ export const useUsersStore = defineStore('users', () => {
 
   const addUser = async (newUser) => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .insert([newUser])
-        .select()
-        .single()
+      const columns = Object.keys(newUser).join(', ')
+      const values = Object.values(newUser)
+      const placeholders = values.map((_, i) => `$${i + 1}`).join(', ')
+      
+      const { data, error } = await queryDBSingle(
+        `INSERT INTO users (${columns}) VALUES (${placeholders}) RETURNING *`,
+        values
+      )
 
       if (error) throw error
       
@@ -153,12 +149,13 @@ export const useUsersStore = defineStore('users', () => {
 
   const editUser = async (id, updatedUser) => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .update(updatedUser)
-        .eq('id', id)
-        .select()
-        .single()
+      const setClauses = Object.keys(updatedUser).map((key, i) => `${key} = $${i + 1}`).join(', ')
+      const values = Object.values(updatedUser)
+      
+      const { data, error } = await queryDBSingle(
+        `UPDATE users SET ${setClauses} WHERE id = $${values.length + 1} RETURNING *`,
+        [...values, id]
+      )
 
       if (error) throw error
 
@@ -181,10 +178,7 @@ export const useUsersStore = defineStore('users', () => {
 
   const deleteUser = async (id) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', id)
+      const { error } = await queryDB('DELETE FROM users WHERE id = $1', [id])
 
       if (error) throw error
 
@@ -201,40 +195,30 @@ export const useUsersStore = defineStore('users', () => {
   
   const assignTestToGroup = async (userGroupId, questionGroupId, startTime, endTime) => {
     try {
-      const { error: groupError } = await supabase
-        .from('user_groups')
-        .update({ 
-          assigned_question_group: questionGroupId,
-          test_start_time: startTime,
-          test_end_time: endTime
-        })
-        .eq('id', userGroupId)
+      const { error: groupError } = await queryDB(
+        `UPDATE user_groups 
+         SET assigned_question_group = $1, test_start_time = $2, test_end_time = $3 
+         WHERE id = $4`,
+        [questionGroupId, startTime, endTime, userGroupId]
+      )
 
       if (groupError) throw groupError
 
-      const { data: students, error: studentsError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('assigned_user_group', userGroupId)
-        .eq('role', 'student')
+      const { data: students, error: studentsError } = await queryDB(
+        'SELECT * FROM users WHERE assigned_user_group = $1 AND role = $2',
+        [userGroupId, 'student']
+      )
 
       if (studentsError) throw studentsError
 
       if (students && students.length > 0) {
-        const updates = students.map(student => ({
-          id: student.id,
-          assigned_question_group: questionGroupId,
-          test_started_at: null // Reset test vaqtini
-        }))
-
-        for (const update of updates) {
-          await supabase
-            .from('users')
-            .update({ 
-              assigned_question_group: update.assigned_question_group,
-              test_started_at: update.test_started_at
-            })
-            .eq('id', update.id)
+        for (const student of students) {
+          await queryDB(
+            `UPDATE users 
+             SET assigned_question_group = $1, test_started_at = NULL 
+             WHERE id = $2`,
+            [questionGroupId, student.id]
+          )
         }
       }
 
@@ -278,12 +262,10 @@ export const useUsersStore = defineStore('users', () => {
 
   const startTest = async (userId) => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .update({ test_started_at: new Date().toISOString() })
-        .eq('id', userId)
-        .select()
-        .single()
+      const { data, error } = await queryDBSingle(
+        'UPDATE users SET test_started_at = $1 WHERE id = $2 RETURNING *',
+        [new Date().toISOString(), userId]
+      )
 
       if (error) throw error
 
@@ -301,27 +283,22 @@ export const useUsersStore = defineStore('users', () => {
 
   const saveTestResult = async (userId, testResult) => {
     try {
-      const { data: user, error: fetchError } = await supabase
-        .from('users')
-        .select('completed_tests')
-        .eq('id', userId)
-        .single()
+      const { data: user, error: fetchError } = await queryDBSingle(
+        'SELECT completed_tests FROM users WHERE id = $1',
+        [userId]
+      )
 
       if (fetchError) throw fetchError
 
       const completedTests = user.completed_tests || []
       completedTests.push(testResult)
 
-      const { data, error } = await supabase
-        .from('users')
-        .update({ 
-          completed_tests: completedTests,
-          assigned_question_group: null,
-          test_started_at: null // Reset test vaqti
-        })
-        .eq('id', userId)
-        .select()
-        .single()
+      const { data, error } = await queryDBSingle(
+        `UPDATE users 
+         SET completed_tests = $1, assigned_question_group = NULL, test_started_at = NULL 
+         WHERE id = $2 RETURNING *`,
+        [JSON.stringify(completedTests), userId]
+      )
 
       if (error) throw error
 

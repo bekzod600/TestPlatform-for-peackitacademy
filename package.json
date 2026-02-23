@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.84.0",
+    "@neondatabase/serverless": "^0.9.4",
     "flowbite-vue": "^0.2.2",
     "pinia": "^3.0.4",
     "vue": "^3.4.38",
