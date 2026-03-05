@@ -6,12 +6,11 @@
         <div class="flex items-center space-x-2">
           <span class="font-semibold text-lg">Test Platformasi</span>
         </div>
-
         <div class="flex items-center space-x-4">
           <span class="flex items-center bg-white text-blue-700 px-3 py-1 rounded-full shadow-sm">
             {{ currentUser?.full_name }}
           </span>
-        </div> 
+        </div>
       </div>
     </nav>
 
@@ -21,16 +20,10 @@
       <!-- Test topilmadi -->
       <div v-if="!testStore.isTestActive"
            class="bg-white rounded-2xl shadow-lg p-12 text-center">
-        
         <div class="text-yellow-500 text-7xl mb-6">⚠️</div>
-
         <h2 class="text-3xl font-bold mb-4">Test topilmadi</h2>
         <p class="text-gray-600 mb-6">Iltimos, avval testni boshlang.</p>
-
-        <button
-          @click="goHome"
-          class="bg-blue-600 text-white px-6 py-3 rounded-xl shadow hover:bg-blue-700 transition"
-        >
+        <button @click="goHome" class="bg-blue-600 text-white px-6 py-3 rounded-xl shadow hover:bg-blue-700 transition">
           Bosh sahifaga qaytish
         </button>
       </div>
@@ -44,13 +37,10 @@
             <div class="text-xl font-semibold mb-3 sm:mb-0">
               Savol {{ currentIndex + 1 }} / {{ totalQuestions }}
             </div>
-            
-            <!-- Vaqt ko'rsatkichi -->
             <div class="px-4 py-1 rounded-full shadow font-bold text-lg"
-                :class="timeRemaining < 300 ? 'bg-red-500 text-white animate-pulse' : 'bg-yellow-400 text-gray-900'">
+                 :class="timeRemaining < 300 ? 'bg-red-500 text-white animate-pulse' : 'bg-yellow-400 text-gray-900'">
               ⏰ {{ timeFormatted }}
             </div>
-
             <div class="bg-white text-blue-700 px-4 py-1 rounded-full shadow">
               Javob berilgan: {{ answeredCount }} / {{ totalQuestions }}
             </div>
@@ -77,13 +67,12 @@
               <div v-for="(answer, index) in currentQuestion.answers"
                    :key="index"
                    class="border rounded-xl p-4 cursor-pointer transition hover:bg-blue-50"
-                   :class="selectedAnswers[currentQuestion.id] === index 
-                            ? 'border-blue-600 bg-blue-100' 
+                   :class="selectedAnswers[currentQuestion.id] === index
+                            ? 'border-blue-600 bg-blue-100'
                             : 'border-gray-300'"
                    @click="handleAnswerSelect(currentQuestion.id, index)">
-
                 <label class="flex items-center cursor-pointer">
-                  <input 
+                  <input
                     type="radio"
                     class="w-5 h-5 text-blue-600"
                     :value="index"
@@ -136,12 +125,10 @@
           <span class="text-3xl mr-2">✓</span>
           <h2 class="text-xl font-bold">Testni yakunlash</h2>
         </div>
-
         <p class="text-gray-700 mb-2">Testni yakunlashni xohlaysizmi?</p>
         <p class="text-gray-500 text-sm mb-6">
           Javob berilgan: {{ answeredCount }} / {{ totalQuestions }}
         </p>
-
         <div class="flex justify-end space-x-3">
           <button
             @click="showFinishDialog = false"
@@ -149,7 +136,6 @@
             class="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 transition disabled:opacity-50">
             Bekor qilish
           </button>
-
           <button
             @click="finishTest"
             :disabled="finishingTest"
@@ -174,12 +160,10 @@ import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUsersStore } from '../stores/users'
 import { useTestStore } from '../stores/test'
-import { useQuestionsStore } from '../stores/questions'
 
 const router = useRouter()
 const usersStore = useUsersStore()
 const testStore = useTestStore()
-const questionsStore = useQuestionsStore()
 
 const currentUser = computed(() => usersStore.currentUser)
 const currentIndex = computed(() => testStore.currentIndex)
@@ -189,7 +173,6 @@ const selectedAnswers = computed(() => testStore.selectedAnswers)
 const showFinishDialog = ref(false)
 const finishingTest = ref(false)
 
-// Vaqt uchun
 const timeRemaining = ref(0)
 const timeFormatted = computed(() => {
   const minutes = Math.floor(timeRemaining.value / 60)
@@ -198,199 +181,133 @@ const timeFormatted = computed(() => {
 })
 let timerInterval = null
 
-const answeredCount = computed(() => {
-  return Object.keys(selectedAnswers.value).length
-})
+const answeredCount = computed(() => Object.keys(selectedAnswers.value).length)
 
-// 🔒 HIMOYA: Tab almashtirish
+// Tab himoya
 const tabSwitchCount = ref(0)
 const maxTabSwitches = 3
 const showTabWarning = ref(false)
 let devToolsCheck = null
 let selectionStyle = null
 
-// Timer boshlash
 const startTimer = () => {
-  // Store'dan vaqtni olish
-  timeRemaining.value = testStore.timeRemaining || testStore.testDuration
-  
-  if (timeRemaining.value === 0) {
-    timeRemaining.value = 1800 // default 30 daqiqa
-  }
-  
+  timeRemaining.value = testStore.timeRemaining || testStore.testDuration || 1800
+
   timerInterval = setInterval(() => {
     if (timeRemaining.value > 0) {
       timeRemaining.value--
       testStore.updateTimeRemaining(timeRemaining.value)
     } else {
-      // Vaqt tugadi
       clearInterval(timerInterval)
       alert('⏰ Vaqt tugadi! Test avtomatik yakunlanadi.')
-      finishTestAutomatically()
+      finishTestAutomatically('Vaqt tugadi')
     }
   }, 1000)
 }
 
-// 🔒 HIMOYA: Developer Tools
 const checkDevTools = () => {
   const threshold = 160
-  if (window.outerWidth - window.innerWidth > threshold || 
+  if (window.outerWidth - window.innerWidth > threshold ||
       window.outerHeight - window.innerHeight > threshold) {
     alert('⚠️ Developer Tools aniqlandi! Test yakunlanadi.')
-    finishTestAutomatically()
+    finishTestAutomatically('Developer Tools aniqlandi')
   }
 }
 
-// 🔒 HIMOYA: Tab o'zgarganda
 const handleVisibilityChange = () => {
   if (document.hidden && testStore.isTestActive) {
     tabSwitchCount.value++
-    
     showTabWarning.value = true
-    setTimeout(() => {
-      showTabWarning.value = false
-    }, 3000)
-    
+    setTimeout(() => { showTabWarning.value = false }, 3000)
+
     if (tabSwitchCount.value >= maxTabSwitches) {
       alert(`⚠️ Siz ${maxTabSwitches} marta tab almashtiringiz! Test avtomatik yakunlanadi.`)
-      finishTestAutomatically()
+      finishTestAutomatically('Qoidabuzarlik: tab almashtirish')
     }
   }
 }
 
-// 🔒 HIMOYA: Screenshot
 const preventScreenshot = (e) => {
-  if ((e.key === 'PrintScreen') || 
-      (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5')) ||
+  if ((e.key === 'PrintScreen') ||
+      (e.metaKey && e.shiftKey && ['3', '4', '5'].includes(e.key)) ||
       (e.ctrlKey && e.key === 'p')) {
     e.preventDefault()
     alert('⚠️ Screenshot va print qilish taqiqlanadi!')
-    return false
   }
 }
 
-// 🔒 HIMOYA: F12, Ctrl+Shift+I
 const preventDevTools = (e) => {
-  if (e.key === 'F12' || 
-      (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+  if (e.key === 'F12' ||
+      (e.ctrlKey && e.shiftKey && ['I', 'J', 'C'].includes(e.key)) ||
       (e.ctrlKey && e.key === 'U')) {
     e.preventDefault()
     alert('⚠️ Developer Tools ochish taqiqlanadi!')
-    return false
   }
 }
 
-// 🔒 HIMOYA: Matnni tanlash
 const preventSelection = () => {
   selectionStyle = document.createElement('style')
   selectionStyle.textContent = `
-    * {
-      -webkit-user-select: none !important;
-      -moz-user-select: none !important;
-      -ms-user-select: none !important;
-      user-select: none !important;
-    }
-    input[type="radio"] {
-      -webkit-user-select: auto !important;
-      -moz-user-select: auto !important;
-      -ms-user-select: auto !important;
-      user-select: auto !important;
-    }
+    * { -webkit-user-select: none !important; -moz-user-select: none !important; -ms-user-select: none !important; user-select: none !important; }
+    input[type="radio"] { -webkit-user-select: auto !important; -moz-user-select: auto !important; user-select: auto !important; }
   `
   document.head.appendChild(selectionStyle)
 }
 
-// 🔒 Test avtomatik yakunlash
-const finishTestAutomatically = async () => {
+/**
+ * Test natijasi obyektini yaratadi — savollar, berilgan va to'g'ri javoblar bilan
+ */
+const buildTestResult = (finishedReason = null) => {
+  const testEndTime = new Date().toISOString()
+  const groupId = currentQuestion.value?.group_id || currentUser.value?.assigned_question_group
+
+  // Har bir savol uchun batafsil ma'lumot
+  const answers = testStore.assignedQuestions.map(q => {
+    const selectedIndex = testStore.selectedAnswers[q.id] ?? null
+    const correctIndex = q.correct
+    return {
+      question_id:    q.id,
+      question_text:  q.question,
+      options:        q.answers,          // shuffled variantlar
+      selected_index: selectedIndex,      // student tanlagan indeks (null = javob berilmagan)
+      correct_index:  correctIndex,       // to'g'ri javob indeksi
+      is_correct:     selectedIndex !== null && selectedIndex === correctIndex
+    }
+  })
+
+  return {
+    group_id:         groupId,
+    score:            testStore.score,
+    total_questions:  testStore.totalQuestions,
+    percentage:       testStore.percentage,
+    test_started_at:  testStore.testStartTime,
+    test_ended_at:    testEndTime,
+    completed_at:     testEndTime,
+    ...(finishedReason ? { finished_reason: finishedReason } : {}),
+    answers           // <-- batafsil javoblar
+  }
+}
+
+const finishTestAutomatically = async (reason = 'Qoidabuzarlik aniqlandi') => {
   if (finishingTest.value) return
-  
   finishingTest.value = true
   clearInterval(timerInterval)
   testStore.finishTest()
-  
-  const testEndTime = new Date().toISOString()
-  
-  const testResult = {
-    group_id: currentQuestion.value?.group_id || currentUser.value?.assigned_question_group,
-    score: testStore.score,
-    total_questions: testStore.totalQuestions,
-    percentage: testStore.percentage,
-    test_started_at: testStore.testStartTime,
-    test_ended_at: testEndTime,
-    completed_at: testEndTime,
-    finished_reason: 'Qoidabuzarlik aniqlandi'
-  }
-  
+
+  const testResult = buildTestResult(reason)
   await usersStore.saveTestResult(currentUser.value.id, testResult)
   router.push('/results')
 }
 
-onMounted(() => {
-  // Avval saqlangan holatni yuklash
-  const hasState = testStore.loadTestState()
-  
-  if (!hasState && !testStore.isTestActive) {
-    // Agar hech qanday holatni bo'lmasa, bosh sahifaga qaytarish
-    console.log('No active test found')
-  }
-  
-  preventSelection()
-  
-  // Timer boshlash
-  if (testStore.isTestActive) {
-    startTimer()
-  }
-  
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  document.addEventListener('keydown', preventScreenshot)
-  document.addEventListener('keydown', preventDevTools)
-  
-  devToolsCheck = setInterval(checkDevTools, 1000)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  document.removeEventListener('keydown', preventScreenshot)
-  document.removeEventListener('keydown', preventDevTools)
-  clearInterval(devToolsCheck)
-  clearInterval(timerInterval)
-
-  if (selectionStyle) {
-    selectionStyle.remove()
-  }
-})
-
-const handleAnswerSelect = (questionId, answerIndex) => {
-  testStore.selectAnswer(questionId, answerIndex)
-}
-
-const previousQuestion = () => {
-  testStore.previousQuestion()
-}
-
-const nextQuestion = () => {
-  testStore.nextQuestion()
-}
-
 const finishTest = async () => {
   if (finishingTest.value) return
-  
   finishingTest.value = true
+  showFinishDialog.value = false
   clearInterval(timerInterval)
   testStore.finishTest()
-  
-  const testEndTime = new Date().toISOString()
-  
-  const testResult = {
-    group_id: currentQuestion.value?.group_id || currentUser.value?.assigned_question_group,
-    score: testStore.score,
-    total_questions: testStore.totalQuestions,
-    percentage: testStore.percentage,
-    test_started_at: testStore.testStartTime,
-    test_ended_at: testEndTime,
-    completed_at: testEndTime
-  }
-  
+
+  const testResult = buildTestResult()
+
   try {
     await usersStore.saveTestResult(currentUser.value.id, testResult)
     router.push('/results')
@@ -400,7 +317,35 @@ const finishTest = async () => {
   }
 }
 
-const goHome = () => {
-  router.push('/')
-}
+const handleAnswerSelect = (questionId, answerIndex) => testStore.selectAnswer(questionId, answerIndex)
+const previousQuestion = () => testStore.previousQuestion()
+const nextQuestion = () => testStore.nextQuestion()
+const goHome = () => router.push('/')
+
+onMounted(() => {
+  const hasState = testStore.loadTestState()
+  if (!hasState && !testStore.isTestActive) {
+    console.log('No active test found')
+  }
+
+  preventSelection()
+
+  if (testStore.isTestActive) {
+    startTimer()
+  }
+
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  document.addEventListener('keydown', preventScreenshot)
+  document.addEventListener('keydown', preventDevTools)
+  devToolsCheck = setInterval(checkDevTools, 1000)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  document.removeEventListener('keydown', preventScreenshot)
+  document.removeEventListener('keydown', preventDevTools)
+  clearInterval(devToolsCheck)
+  clearInterval(timerInterval)
+  if (selectionStyle) selectionStyle.remove()
+})
 </script>
