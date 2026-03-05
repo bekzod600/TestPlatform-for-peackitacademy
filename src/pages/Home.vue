@@ -28,51 +28,66 @@
     <!-- Main Content -->
     <div class="flex justify-center items-center py-12">
       <div class="w-full max-w-[calc(100%-2rem)] md:max-w-2xl lg:max-w-3xl xl:max-w-4xl bg-white shadow-xl rounded-2xl p-8">
-        
-        <div class="text-center">
-          <div class="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center">
-            <i class="mdi mdi-account-circle text-white text-5xl"></i>
-          </div>
 
-          <h2 class="text-3xl font-bold mt-4">Xush kelibsiz, {{ currentUser?.full_name }}!</h2>
-          <p class="text-gray-600 mt-2">
-            Testni boshlash yoki natijalarni ko'rish uchun tanlang.
-          </p>
-
-          <div v-if="userGroupName" class="inline-flex items-center mt-4 px-4 py-1 bg-blue-100 text-blue-800 rounded-full">
-            <i class="mdi mdi-account-group mr-1"></i>
-            Guruh: {{ userGroupName }}
-          </div>
+        <!-- Loading overlay -->
+        <div v-if="initialLoading" class="text-center py-16">
+          <i class="mdi mdi-loading mdi-spin text-blue-600 text-5xl mb-4 block"></i>
+          <p class="text-gray-500">Ma'lumotlar yuklanmoqda...</p>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-10">
+        <template v-else>
+          <div class="text-center">
+            <div class="mx-auto w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center">
+              <i class="mdi mdi-account-circle text-white text-5xl"></i>
+            </div>
 
-          <!-- Start Test -->
-          <button
-            @click="showRulesModal = true"
-            :disabled="loading"
-            class="cursor-pointer bg-blue-600 text-white rounded-xl p-6 shadow-md hover:bg-blue-700 transition text-center disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <i class="mdi mdi-clipboard-text text-6xl mb-4 block"></i>
-            <h3 class="text-xl font-semibold">
-              <i v-if="loading" class="mdi mdi-loading mdi-spin"></i>
-              <span v-else>Testni boshlash</span>
-            </h3>
-            <p class="text-blue-100 mt-1">Yangi test topshirish</p>
-          </button>
+            <h2 class="text-3xl font-bold mt-4">Xush kelibsiz, {{ currentUser?.full_name }}!</h2>
+            <p class="text-gray-600 mt-2">
+              Testni boshlash yoki natijalarni ko'rish uchun tanlang.
+            </p>
 
-          <!-- Results -->
-          <button
-            @click="viewResults"
-            class="cursor-pointer bg-green-600 text-white rounded-xl p-6 shadow-md hover:bg-green-700 transition text-center"
-          >
-            <i class="mdi mdi-chart-bar text-6xl mb-4 block"></i>
-            <h3 class="text-xl font-semibold">Natijalar</h3>
-            <p class="text-green-100 mt-1">Test natijalarini ko'rish</p>
-          </button>
+            <div v-if="userGroupName" class="inline-flex items-center mt-4 px-4 py-1 bg-blue-100 text-blue-800 rounded-full">
+              <i class="mdi mdi-account-group mr-1"></i>
+              Guruh: {{ userGroupName }}
+            </div>
 
-        </div>
+            <!-- Test holati -->
+            <div v-if="testStatusMessage" class="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium"
+                 :class="testStatusClass">
+              <i class="mdi" :class="testStatusIcon"></i>
+              {{ testStatusMessage }}
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-10">
+
+            <!-- Start Test -->
+            <button
+              @click="openRulesModal"
+              :disabled="loading"
+              class="cursor-pointer bg-blue-600 text-white rounded-xl p-6 shadow-md hover:bg-blue-700 transition text-center disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <i class="mdi mdi-clipboard-text text-6xl mb-4 block"></i>
+              <h3 class="text-xl font-semibold">
+                <i v-if="loading" class="mdi mdi-loading mdi-spin"></i>
+                <span v-else>Testni boshlash</span>
+              </h3>
+              <p class="text-blue-100 mt-1">Yangi test topshirish</p>
+            </button>
+
+            <!-- Results -->
+            <button
+              @click="viewResults"
+              class="cursor-pointer bg-green-600 text-white rounded-xl p-6 shadow-md hover:bg-green-700 transition text-center"
+            >
+              <i class="mdi mdi-chart-bar text-6xl mb-4 block"></i>
+              <h3 class="text-xl font-semibold">Natijalar</h3>
+              <p class="text-green-100 mt-1">Test natijalarini ko'rish</p>
+            </button>
+
+          </div>
+        </template>
       </div>
     </div>
 
@@ -128,49 +143,25 @@
               </div>
 
               <div class="flex items-start gap-4">
-                <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <i class="mdi mdi-content-copy text-red-600 text-xl"></i>
+                <div class="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <i class="mdi mdi-timer text-orange-600 text-xl"></i>
                 </div>
                 <div>
-                  <h4 class="font-semibold text-gray-800 mb-1">Nusxa olmang</h4>
+                  <h4 class="font-semibold text-gray-800 mb-1">Vaqt cheklovi</h4>
                   <p class="text-sm text-gray-600">
-                    Savol yoki javoblarni copy-paste qilish, screenshot olish va matnni tanlash taqiqlanadi.
+                    Har bir test uchun belgilangan vaqt mavjud. Vaqt tugaganda test avtomatik yakunlanadi.
                   </p>
                 </div>
               </div>
 
               <div class="flex items-start gap-4">
-                <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <i class="mdi mdi-code-tags text-red-600 text-xl"></i>
+                <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <i class="mdi mdi-eye-off text-purple-600 text-xl"></i>
                 </div>
                 <div>
-                  <h4 class="font-semibold text-gray-800 mb-1">Developer Tools taqiqlangan</h4>
+                  <h4 class="font-semibold text-gray-800 mb-1">Nusxa ko'chirish taqiqlangan</h4>
                   <p class="text-sm text-gray-600">
-                    F12, Ctrl+Shift+I va boshqa developer tools tugmalarini ishlatish taqiqlanadi.
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex items-start gap-4">
-                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <i class="mdi mdi-clock-outline text-green-600 text-xl"></i>
-                </div>
-                <div>
-                  <h4 class="font-semibold text-gray-800 mb-1">Vaqt cheklangan</h4>
-                  <p class="text-sm text-gray-600">
-                    Test uchun vaqt cheklovi bor, belgilangan vaqtda testni yakunlashingiz kerak.
-                  </p>
-                </div>
-              </div>
-
-              <div class="flex items-start gap-4">
-                <div class="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <i class="mdi mdi-arrow-left-right text-green-600 text-xl"></i>
-                </div>
-                <div>
-                  <h4 class="font-semibold text-gray-800 mb-1">Savollar o'rtasida harakat qilish</h4>
-                  <p class="text-sm text-gray-600">
-                    Istalgan savol tartibida javob berishingiz va oldingi savollarga qaytishingiz mumkin.
+                    Test savollarini nusxa ko'chirish, screenshot olish taqiqlangan.
                   </p>
                 </div>
               </div>
@@ -237,14 +228,47 @@ const testStore = useTestStore()
 const currentUser = computed(() => usersStore.currentUser)
 const userGroupName = ref('')
 const loading = ref(false)
+const initialLoading = ref(true)
 const showRulesModal = ref(false)
 const snackbar = ref({ show: false, message: '', type: 'success' })
 
+// Test holati uchun computed
+const testStatusMessage = computed(() => {
+  if (!currentUser.value) return ''
+  if (currentUser.value.assigned_question_group) {
+    return 'Test tayyor — boshlashingiz mumkin!'
+  }
+  return "Sizga hali test biriktirilmagan"
+})
+
+const testStatusClass = computed(() => {
+  if (currentUser.value?.assigned_question_group) {
+    return 'bg-green-100 text-green-700'
+  }
+  return 'bg-yellow-100 text-yellow-700'
+})
+
+const testStatusIcon = computed(() => {
+  if (currentUser.value?.assigned_question_group) {
+    return 'mdi-check-circle'
+  }
+  return 'mdi-clock-outline'
+})
+
 onMounted(async () => {
-  if (currentUser.value?.assigned_user_group) {
-    await usersStore.loadUserGroups()
-    const group = usersStore.userGroups.find(g => g.id === currentUser.value.assigned_user_group)
-    userGroupName.value = group?.name || ''
+  initialLoading.value = true
+  try {
+    // Supabase dan eng yangi ma'lumotni olamiz
+    // (admin test biriktirgan bo'lishi mumkin)
+    await usersStore.refreshCurrentUser()
+
+    if (currentUser.value?.assigned_user_group) {
+      await usersStore.loadUserGroups()
+      const group = usersStore.userGroups.find(g => g.id === currentUser.value.assigned_user_group)
+      userGroupName.value = group?.name || ''
+    }
+  } finally {
+    initialLoading.value = false
   }
 })
 
@@ -253,43 +277,61 @@ const handleLogout = () => {
   router.push('/login')
 }
 
+// Qoidalar modalini ochishdan oldin ham refresh qilamiz
+const openRulesModal = async () => {
+  loading.value = true
+  try {
+    await usersStore.refreshCurrentUser()
+  } finally {
+    loading.value = false
+  }
+  showRulesModal.value = true
+}
+
 const shuffleArray = (array) => {
   const shuffled = [...array]
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
   return shuffled
 }
 
 const acceptRulesAndStart = async () => {
-  if (!currentUser.value?.assigned_question_group) {
-    showSnackbar("Sizga hali test biriktirilmagan! Admin bilan bog'laning.", 'warning')
-    showRulesModal.value = false
-    return
-  }
-
   loading.value = true
+  showRulesModal.value = false
+
   try {
+    // Test boshlashdan oldin eng yangi ma'lumotni olamiz
+    const freshUser = await usersStore.refreshCurrentUser()
+    const user = freshUser || currentUser.value
+
+    if (!user?.assigned_question_group) {
+      showSnackbar("Sizga hali test biriktirilmagan! Admin bilan bog'laning.", 'warning')
+      return
+    }
+
     const questions = await questionsStore.loadQuestions()
-    const questionGroupId = currentUser.value.assigned_question_group
+    const questionGroupId = user.assigned_question_group
 
     let filteredQuestions = questions.filter(q => q.group_id === questionGroupId)
-    
+
     if (filteredQuestions.length === 0) {
       showSnackbar("Sizning test guruhingizda savollar mavjud emas!", 'error')
-      showRulesModal.value = false
       return
     }
 
     let shuffledQuestions = shuffleArray(filteredQuestions)
-    
+
     if (shuffledQuestions.length > 50) {
       shuffledQuestions = shuffledQuestions.slice(0, 50)
     }
-    
+
     await testStore.startTest(shuffledQuestions, { groupId: questionGroupId })
     router.push('/test')
+  } catch (err) {
+    console.error('Test boshlashda xatolik:', err)
+    showSnackbar("Xatolik yuz berdi. Qayta urinib ko'ring.", 'error')
   } finally {
     loading.value = false
   }
@@ -303,7 +345,7 @@ const showSnackbar = (message, type = 'success') => {
   snackbar.value = { show: true, message, type }
   setTimeout(() => {
     snackbar.value = { show: false, message: '', type: 'success' }
-  }, 3000)
+  }, 4000)
 }
 </script>
 

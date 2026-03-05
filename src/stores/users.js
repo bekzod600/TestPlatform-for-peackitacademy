@@ -14,7 +14,7 @@ export const useUsersStore = defineStore('users', () => {
         .from('users')
         .select('*')
         .order('id', { ascending: true })
-      
+
       if (error) throw error
       users.value = data || []
       return data
@@ -30,7 +30,7 @@ export const useUsersStore = defineStore('users', () => {
         .from('user_groups')
         .select('*')
         .order('id', { ascending: true })
-      
+
       if (error) throw error
       userGroups.value = data || []
       return data
@@ -49,7 +49,7 @@ export const useUsersStore = defineStore('users', () => {
         .single()
 
       if (error) throw error
-      
+
       userGroups.value.push(data)
       return data
     } catch (error) {
@@ -126,10 +126,51 @@ export const useUsersStore = defineStore('users', () => {
     localStorage.removeItem('currentUser')
   }
 
+  /**
+   * localStorage dan foydalanuvchini yuklaydi (faqat boshlang'ich holat uchun).
+   * Keyin refreshCurrentUser() chaqirilishi kerak.
+   */
   const loadUserFromStorage = () => {
     const stored = localStorage.getItem('currentUser')
     if (stored) {
-      currentUser.value = JSON.parse(stored)
+      try {
+        currentUser.value = JSON.parse(stored)
+      } catch {
+        localStorage.removeItem('currentUser')
+      }
+    }
+  }
+
+  /**
+   * Supabase dan joriy foydalanuvchining eng yangi ma'lumotlarini oladi.
+   * Bu funksiya admin test biriktirganida student sahifasi
+   * qayta login qilmasdan yangi ma'lumotni ko'rishi uchun kerak.
+   */
+  const refreshCurrentUser = async () => {
+    if (!currentUser.value?.id) return null
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', currentUser.value.id)
+        .single()
+
+      if (error) throw error
+      if (!data) return null
+
+      // Faqat o'zgargan bo'lsa yangilash (keraksiz reaktivlikdan qochish)
+      const existingStr = JSON.stringify(currentUser.value)
+      const newStr = JSON.stringify(data)
+      if (existingStr !== newStr) {
+        currentUser.value = data
+        localStorage.setItem('currentUser', JSON.stringify(data))
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error refreshing current user:', error)
+      return null
     }
   }
 
@@ -142,7 +183,7 @@ export const useUsersStore = defineStore('users', () => {
         .single()
 
       if (error) throw error
-      
+
       users.value.push(data)
       return data
     } catch (error) {
@@ -198,12 +239,12 @@ export const useUsersStore = defineStore('users', () => {
       return false
     }
   }
-  
+
   const assignTestToGroup = async (userGroupId, questionGroupId, startTime, endTime) => {
     try {
       const { error: groupError } = await supabase
         .from('user_groups')
-        .update({ 
+        .update({
           assigned_question_group: questionGroupId,
           test_start_time: startTime,
           test_end_time: endTime
@@ -221,20 +262,14 @@ export const useUsersStore = defineStore('users', () => {
       if (studentsError) throw studentsError
 
       if (students && students.length > 0) {
-        const updates = students.map(student => ({
-          id: student.id,
-          assigned_question_group: questionGroupId,
-          test_started_at: null // Reset test vaqtini
-        }))
-
-        for (const update of updates) {
+        for (const student of students) {
           await supabase
             .from('users')
-            .update({ 
-              assigned_question_group: update.assigned_question_group,
-              test_started_at: update.test_started_at
+            .update({
+              assigned_question_group: questionGroupId,
+              test_started_at: null
             })
-            .eq('id', update.id)
+            .eq('id', student.id)
         }
       }
 
@@ -258,16 +293,16 @@ export const useUsersStore = defineStore('users', () => {
     const endTime = new Date(userGroup.test_end_time)
 
     if (now < startTime) {
-      return { 
-        available: false, 
+      return {
+        available: false,
         reason: 'Test hali boshlanmagan',
         startTime: startTime
       }
     }
 
     if (now > endTime) {
-      return { 
-        available: false, 
+      return {
+        available: false,
         reason: 'Test vaqti tugadi',
         endTime: endTime
       }
@@ -314,10 +349,10 @@ export const useUsersStore = defineStore('users', () => {
 
       const { data, error } = await supabase
         .from('users')
-        .update({ 
+        .update({
           completed_tests: completedTests,
           assigned_question_group: null,
-          test_started_at: null // Reset test vaqti
+          test_started_at: null
         })
         .eq('id', userId)
         .select()
@@ -349,6 +384,7 @@ export const useUsersStore = defineStore('users', () => {
     login,
     logout,
     loadUserFromStorage,
+    refreshCurrentUser,
     addUser,
     editUser,
     deleteUser,
