@@ -327,7 +327,7 @@
                 <i class="mdi mdi-close-circle text-red-500"></i>
                 {{ selectedTest?.total_questions - selectedTest?.score }} noto'g'ri
               </span>
-              <span class="flex items-center gap-1 hidden sm:flex">
+              <span class="items-center gap-1 hidden sm:flex">
                 <i class="mdi mdi-minus-circle text-yellow-500"></i>
                 {{ unansweredCount }} javob berilmagan
               </span>

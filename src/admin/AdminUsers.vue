@@ -221,6 +221,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useUsersStore } from '../stores/users'
 import {
   FwbButton,
@@ -236,8 +237,6 @@ import {
 import UserGroupSelect from './components/UserGroupSelect.vue'
 
 const usersStore = useUsersStore()
-const users = ref([])
-const userGroups = ref([])
 const showForm = ref(false)
 const editingId = ref(null)
 
@@ -253,11 +252,13 @@ const form = ref({
   assigned_user_group: null
 })
 
+// Store dan to'g'ridan-to'g'ri reaktiv reference ishlatamiz
+const users = computed(() => usersStore.users)
+const userGroups = computed(() => usersStore.userGroups)
+
 onMounted(async () => {
   await usersStore.loadUsers()
   await usersStore.loadUserGroups()
-  users.value = usersStore.users
-  userGroups.value = usersStore.userGroups
 })
 
 const filteredUsers = computed(() => {
@@ -286,8 +287,13 @@ const getUserGroupName = (id) => {
 }
 
 const saveUser = async () => {
-  if (!form.value.full_name || !form.value.username || !form.value.password) {
+  if (!form.value.full_name || !form.value.username) {
     alert('Barcha maydonlarni to\'ldiring!')
+    return
+  }
+
+  if (!editingId.value && !form.value.password) {
+    alert('Parolni kiriting!')
     return
   }
 
@@ -296,28 +302,36 @@ const saveUser = async () => {
     return
   }
 
-  if (editingId.value) {
-    await usersStore.editUser(editingId.value, {
-      full_name: form.value.full_name,
-      username: form.value.username,
-      password: form.value.password,
-      role: form.value.role,
-      assigned_user_group: form.value.assigned_user_group
-    })
-    alert('Foydalanuvchi tahrirlandi')
-  } else {
-    await usersStore.addUser({
-      full_name: form.value.full_name,
-      username: form.value.username,
-      password: form.value.password,
-      role: form.value.role,
-      assigned_user_group: form.value.assigned_user_group
-    })
-    alert('Foydalanuvchi qo\'shildi')
+  try {
+    if (editingId.value) {
+      const payload = {
+        full_name: form.value.full_name,
+        username: form.value.username,
+        role: form.value.role,
+        assigned_user_group: form.value.assigned_user_group
+      }
+      // Parol kiritilgan bo'lsagina yangilash
+      if (form.value.password) {
+        payload.password = form.value.password
+      }
+      const result = await usersStore.editUser(editingId.value, payload)
+      if (!result) throw new Error('Saqlashda xatolik yuz berdi')
+      alert('Foydalanuvchi tahrirlandi')
+    } else {
+      const result = await usersStore.addUser({
+        full_name: form.value.full_name,
+        username: form.value.username,
+        password: form.value.password,
+        role: form.value.role,
+        assigned_user_group: form.value.assigned_user_group
+      })
+      if (!result) throw new Error('Qo\'shishda xatolik yuz berdi')
+      alert('Foydalanuvchi qo\'shildi')
+    }
+    resetForm()
+  } catch (err) {
+    alert('Xatolik: ' + (err.message || 'Noma\'lum xatolik'))
   }
-
-  users.value = usersStore.users
-  resetForm()
 }
 
 const editUser = (user) => {
@@ -335,9 +349,12 @@ const editUser = (user) => {
 
 const deleteUser = async (id) => {
   if (confirm('Rostdan o\'chirmoqchisiz?')) {
-    await usersStore.deleteUser(id)
-    users.value = usersStore.users
-    alert('Foydalanuvchi o\'chirildi')
+    const result = await usersStore.deleteUser(id)
+    if (result) {
+      alert('Foydalanuvchi o\'chirildi')
+    } else {
+      alert('O\'chirishda xatolik yuz berdi!')
+    }
   }
 }
 
