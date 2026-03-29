@@ -64,7 +64,7 @@ const categories = ref<CategoryWithSubject[]>([])
 
 async function loadReferenceData() {
   const [testsRes, catsRes] = await Promise.all([
-    fetchTests({ page: 1, page_size: 500 }),
+    fetchTests({ page: 1, page_size: 500, created_by: auth.user?.id }),
     fetchCategories(),
   ])
   if (testsRes.success) tests.value = testsRes.data as unknown as Test[]
@@ -118,7 +118,7 @@ const pagination = ref({
 async function loadQuestions() {
   isLoading.value = true
   try {
-    const res = await fetchQuestions({ ...filters })
+    const res = await fetchQuestions({ ...filters, created_by: auth.user?.id })
     if (res.success) {
       questions.value = res.data
       pagination.value = res.pagination
@@ -248,7 +248,7 @@ function addOption() {
 
 function removeOption(index: number) {
   if (optionDrafts.value.length <= 2) {
-    toast({ title: "Kamida 2 ta variant bo'lishi kerak", variant: 'destructive' })
+    toast({ title: 'Kamida 2 ta variant bo\'lishi kerak', variant: 'destructive' })
     return
   }
   const opt = optionDrafts.value[index]
@@ -281,7 +281,7 @@ async function saveQuestion() {
   }
   const hasCorrect = activeOpts.some((o) => o.is_correct)
   if (!hasCorrect) {
-    toast({ title: "Kamida bitta to'g'ri javob belgilanishi kerak", variant: 'destructive' })
+    toast({ title: 'Kamida bitta to\'g\'ri javob belgilanishi kerak', variant: 'destructive' })
     return
   }
   for (const o of activeOpts) {
@@ -401,14 +401,14 @@ async function confirmDelete() {
   try {
     const res = await deleteQuestion(deletingQuestion.value.id)
     if (res.success) {
-      toast({ title: "Savol o'chirildi", variant: 'success' })
+      toast({ title: 'Savol o\'chirildi', variant: 'success' })
       closeDeleteModal()
       await loadQuestions()
     } else {
-      toast({ title: 'Xatolik', description: res.error ?? "O'chirishda xatolik", variant: 'destructive' })
+      toast({ title: 'Xatolik', description: res.error ?? 'O\'chirishda xatolik', variant: 'destructive' })
     }
   } catch {
-    toast({ title: 'Xatolik', description: "O'chirishda xatolik", variant: 'destructive' })
+    toast({ title: 'Xatolik', description: 'O\'chirishda xatolik', variant: 'destructive' })
   } finally {
     isDeleting.value = false
   }
@@ -443,16 +443,13 @@ const pageNumbers = computed(() => {
 // Max variantlar sonini aniqlab, Variant1...VariantN va "To'g'ri javob" ustunlari qo'shiladi.
 // ---------------------------------------------------------------------------
 async function exportQuestions() {
-  // Barcha savollar orasida maksimal variant sonini topamiz
   const maxOptions = questions.value.reduce((max, q) => {
     return Math.max(max, q.answer_options?.length ?? 0)
   }, 0)
 
-  // Asosiy ustunlar
   const rows = questions.value.map((q) => {
     const sorted = (q.answer_options ?? []).slice().sort((a, b) => a.sort_order - b.sort_order)
 
-    // To'g'ri javob nomlarini topamiz (Variant1, Variant2, ...)
     const correctLabels: string[] = []
     sorted.forEach((opt, idx) => {
       if (opt.is_correct) correctLabels.push(`Variant${idx + 1}`)
@@ -468,7 +465,6 @@ async function exportQuestions() {
       Kategoriya: q.category?.name ?? '',
     }
 
-    // Variant ustunlari
     for (let i = 0; i < maxOptions; i++) {
       row[`Variant${i + 1}`] = sorted[i]?.option_text ?? ''
     }
@@ -480,7 +476,6 @@ async function exportQuestions() {
     return row
   })
 
-  // useExcel dan foydalanmasdan to'g'ridan-to'g'ri SheetJS ishlatamiz (dinamik ustunlar uchun)
   const XLSX = await import('xlsx')
 
   if (!rows.length) {
@@ -490,7 +485,6 @@ async function exportQuestions() {
 
   const ws = XLSX.utils.json_to_sheet(rows)
 
-  // Ustun kengliklarini avtomatik sozlash
   const header = Object.keys(rows[0])
   ws['!cols'] = header.map((key) => {
     const maxLen = Math.max(
@@ -509,13 +503,10 @@ async function exportQuestions() {
 
 // ---------------------------------------------------------------------------
 // Excel Shablon Export (Import uchun bo'sh shablon)
-// Minimum format + kengaytirilgan ustunlar, 2 ta namuna qator bilan
 // ---------------------------------------------------------------------------
 async function exportTemplate() {
   const XLSX = await import('xlsx')
 
-  // Shablon sarlavhasi (minimum + ixtiyoriy ustunlar)
-  // Namuna qatorlar — foydalanuvchi uchun ko'rsatma
   const sampleRows = [
     {
       'Savol matni': '2 + 2 = ?',
@@ -523,19 +514,19 @@ async function exportTemplate() {
       'Variant2': '4',
       'Variant3': '5',
       'Variant4': '6',
-      "To'g'ri javob": '2',          // 2-chi variant (Variant2) to'g'ri
-      'Qiyinlik': 'Oson',             // Oson | O\'rta | Qiyin
+      "To'g'ri javob": '2',
+      'Qiyinlik': 'Oson',
       'Ball': '1',
       'Tushuntirish': '2 + 2 = 4',
-      'Holat': 'Faol',                // Faol | Nofaol
+      'Holat': 'Faol',
     },
     {
-      'Savol matni': 'O\'zbekiston poytaxti qaysi shahar?',
+      'Savol matni': "O'zbekiston poytaxti qaysi shahar?",
       'Variant1': 'Samarqand',
       'Variant2': 'Buxoro',
       'Variant3': 'Toshkent',
       'Variant4': '',
-      "To'g'ri javob": '3',          // 3-chi variant (Variant3) to'g'ri
+      "To'g'ri javob": '3',
       'Qiyinlik': "O'rta",
       'Ball': '1',
       'Tushuntirish': '',
@@ -545,7 +536,6 @@ async function exportTemplate() {
 
   const ws = XLSX.utils.json_to_sheet(sampleRows)
 
-  // Ustun kengliklarini sozlash
   const keys = Object.keys(sampleRows[0])
   ws['!cols'] = keys.map((key) => {
     const maxLen = Math.max(
@@ -565,13 +555,9 @@ async function exportTemplate() {
 // ---------------------------------------------------------------------------
 // Excel Import
 //
-// Qo'llab-quvvatlanadigan formatlar:
-//   MINIMUM (majburiy): "Savol matni" | Variant1 | Variant2 | "To'g'ri javob" (raqam: 1, 2, ...)
-//   KENGAYTIRILGAN (ixtiyoriy): + Qiyinlik | Ball | Tushuntirish | Holat | Test | Kategoriya
-//
 // "To'g'ri javob" ustuni:
-//   - Bitta raqam:       1        → Variant1 to'g'ri
-//   - Vergul bilan:      1,3      → Variant1 va Variant3 to'g'ri
+//   - Bitta raqam:        1        → Variant1 to'g'ri
+//   - Vergul bilan:       1,3      → Variant1 va Variant3 to'g'ri
 //   - Variant nomi bilan: Variant2 → Variant2 to'g'ri (avvalgi format ham ishlaydi)
 // ---------------------------------------------------------------------------
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -581,11 +567,6 @@ function triggerImport() {
   fileInput.value?.click()
 }
 
-/**
- * "To'g'ri javob" ustun qiymatini tahlil qiladi.
- * Raqam (1, 2, 3) ham, Variant nomi (Variant1, Variant2) ham qabul qilinadi.
- * Qaytaradi: to'g'ri bo'lgan variantlarning 0-based index to'plami.
- */
 function parseCorrectAnswers(raw: string, variantCount: number): Set<number> {
   const result = new Set<number>()
   if (!raw.trim()) return result
@@ -593,13 +574,10 @@ function parseCorrectAnswers(raw: string, variantCount: number): Set<number> {
   const parts = raw.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)
 
   for (const part of parts) {
-    // Sof raqam: "1", "2", "3" — 1-based indeks
     if (/^\d+$/.test(part)) {
-      const idx = parseInt(part, 10) - 1 // 0-based ga o'tkazish
+      const idx = parseInt(part, 10) - 1
       if (idx >= 0 && idx < variantCount) result.add(idx)
-    }
-    // Variant nomi: "Variant1", "variant2" — avvalgi format mos kelishi uchun
-    else if (/^variant(\d+)$/i.test(part)) {
+    } else if (/^variant(\d+)$/i.test(part)) {
       const match = part.match(/^variant(\d+)$/i)
       if (match) {
         const idx = parseInt(match[1], 10) - 1
@@ -629,14 +607,12 @@ async function handleFileImport(event: Event) {
     const errors: string[] = []
 
     for (const row of rows) {
-      // --- 1. Savol matni (majburiy) ---
       const questionText = String(row['Savol matni'] ?? '').trim()
       if (!questionText || questionText === 'Savol matni bu yerga yoziladi') {
         skipped++
         continue
       }
 
-      // --- 2. Variant ustunlarini topish (Variant1, Variant2, ...) ---
       const variantKeys = Object.keys(row)
         .filter((k) => /^Variant\d+$/i.test(k))
         .sort((a, b) => {
@@ -655,7 +631,6 @@ async function handleFileImport(event: Event) {
         continue
       }
 
-      // --- 3. To'g'ri javobni aniqlash ---
       const correctRaw = String(row["To'g'ri javob"] ?? row['correct'] ?? '').trim()
       const correctIndexes = parseCorrectAnswers(correctRaw, variantTexts.length)
 
@@ -665,7 +640,6 @@ async function handleFileImport(event: Event) {
         continue
       }
 
-      // --- 4. Ixtiyoriy maydonlar ---
       const diffStr = String(row['Qiyinlik'] ?? '').toLowerCase()
       let difficulty: DifficultyLevel = DIFFICULTY_LEVELS.EASY
       if (diffStr.includes('medium') || diffStr.includes("o'rta") || diffStr.includes('orta')) {
@@ -678,7 +652,6 @@ async function handleFileImport(event: Event) {
       const explanation = String(row['Tushuntirish'] ?? '').trim() || null
       const isActive = String(row['Holat'] ?? 'Faol').toLowerCase() !== 'nofaol'
 
-      // --- 5. Savol yaratish ---
       const payload: QuestionInsert = {
         question_text: questionText,
         question_type: QUESTION_TYPES.MULTIPLE_CHOICE,
@@ -700,7 +673,6 @@ async function handleFileImport(event: Event) {
 
       imported++
 
-      // --- 6. Variantlarni saqlash ---
       for (let i = 0; i < variantTexts.length; i++) {
         await createOption({
           question_id: res.data.id,
@@ -711,7 +683,6 @@ async function handleFileImport(event: Event) {
       }
     }
 
-    // --- Natija xabari ---
     if (imported > 0) {
       toast({
         title: `${imported} ta savol import qilindi`,
@@ -763,7 +734,6 @@ onMounted(async () => {
           class="hidden"
           @change="handleFileImport"
         />
-        <!-- Import tugmasi -->
         <button
           @click="triggerImport"
           :disabled="isImporting"

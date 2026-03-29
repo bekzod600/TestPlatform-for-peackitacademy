@@ -11,6 +11,8 @@ declare module 'vue-router' {
     requiresAuth?: boolean
     /** Route requires an admin-level role (admin / super_admin). */
     requiresAdmin?: boolean
+    /** Route requires teacher role. */
+    requiresTeacher?: boolean
     /** Page title shown in the document / breadcrumbs. */
     title?: string
   }
@@ -28,11 +30,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Kirish' },
   },
 
-  // --- Root redirect ---------------------------------------------------------
+  // --- Root redirect (handled by guard based on role) -----------------------
   {
     path: '/',
     name: 'Root',
-    redirect: '/student/dashboard',
+    component: () => import('@/pages/auth/LoginPage.vue'),
+    meta: { title: 'Kirish' },
   },
 
   // --- Student routes (wrapped in StudentLayout) -----------------------------
@@ -62,6 +65,51 @@ const routes: RouteRecordRaw[] = [
     ],
   },
 
+  // --- Teacher routes (wrapped in TeacherLayout) ----------------------------
+  {
+    path: '/teacher',
+    component: () => import('@/layouts/TeacherLayout.vue'),
+    meta: { requiresAuth: true, requiresTeacher: true },
+    children: [
+      {
+        path: '',
+        name: 'TeacherDashboard',
+        component: () => import('@/pages/teacher/DashboardPage.vue'),
+        meta: { title: 'Dashboard' },
+      },
+      {
+        path: 'questions',
+        name: 'TeacherQuestions',
+        component: () => import('@/pages/teacher/QuestionsPage.vue'),
+        meta: { title: 'Savollar' },
+      },
+      {
+        path: 'groups',
+        name: 'TeacherGroups',
+        component: () => import('@/pages/teacher/GroupsPage.vue'),
+        meta: { title: 'Guruhlarim' },
+      },
+      {
+        path: 'assignments',
+        name: 'TeacherAssignments',
+        component: () => import('@/pages/teacher/AssignmentsPage.vue'),
+        meta: { title: 'Test biriktirish' },
+      },
+      {
+        path: 'tests',
+        name: 'TeacherTests',
+        component: () => import('@/pages/teacher/TestsPage.vue'),
+        meta: { title: 'Testlar' },
+      },
+      {
+        path: 'results',
+        name: 'TeacherResults',
+        component: () => import('@/pages/teacher/ResultsPage.vue'),
+        meta: { title: 'Natijalar' },
+      },
+    ],
+  },
+
   // --- Admin routes ----------------------------------------------------------
   {
     path: '/admin',
@@ -85,6 +133,18 @@ const routes: RouteRecordRaw[] = [
         name: 'AdminUserGroups',
         component: () => import('@/pages/admin/UserGroupsPage.vue'),
         meta: { title: 'Guruhlar' },
+      },
+      {
+        path: 'subjects',
+        name: 'AdminSubjects',
+        component: () => import('@/pages/admin/SubjectsPage.vue'),
+        meta: { title: 'Fanlar' },
+      },
+      {
+        path: 'categories',
+        name: 'AdminCategories',
+        component: () => import('@/pages/admin/CategoriesPage.vue'),
+        meta: { title: 'Kategoriyalar' },
       },
       {
         path: 'questions',

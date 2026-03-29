@@ -21,6 +21,7 @@ import {
   deleteUser,
   fetchUserGroups,
 } from '@/api/admin.api'
+import { useAuthStore } from '@/stores/auth'
 import { USER_ROLES, ROLE_LABELS, PAGINATION } from '@/lib/constants'
 import type { UserRole } from '@/lib/constants'
 import type {
@@ -31,6 +32,8 @@ import type {
   UserListFilters,
   PaginatedResponse,
 } from '@/types'
+
+const authStore = useAuthStore()
 
 // ---------------------------------------------------------------
 // State
@@ -97,12 +100,26 @@ const successMessage = ref('')
 
 const showGroupSelect = computed(() => form.role === USER_ROLES.STUDENT)
 
-const roleOptions: { value: UserRole; label: string }[] = [
-  { value: USER_ROLES.SUPER_ADMIN, label: ROLE_LABELS[USER_ROLES.SUPER_ADMIN] },
-  { value: USER_ROLES.ADMIN, label: ROLE_LABELS[USER_ROLES.ADMIN] },
-  { value: USER_ROLES.TEACHER, label: ROLE_LABELS[USER_ROLES.TEACHER] },
-  { value: USER_ROLES.STUDENT, label: ROLE_LABELS[USER_ROLES.STUDENT] },
-]
+/** super_admin barcha rollarni ko'radi/yaratadi; admin faqat teacher va student */
+const roleOptions = computed(() => {
+  const all: { value: UserRole; label: string }[] = [
+    { value: USER_ROLES.SUPER_ADMIN, label: ROLE_LABELS[USER_ROLES.SUPER_ADMIN] },
+    { value: USER_ROLES.ADMIN, label: ROLE_LABELS[USER_ROLES.ADMIN] },
+    { value: USER_ROLES.TEACHER, label: ROLE_LABELS[USER_ROLES.TEACHER] },
+    { value: USER_ROLES.STUDENT, label: ROLE_LABELS[USER_ROLES.STUDENT] },
+  ]
+  if (authStore.isSuperAdmin) return all
+  // admin faqat teacher va student yarata oladi
+  return all.filter((o) => o.value === USER_ROLES.TEACHER || o.value === USER_ROLES.STUDENT)
+})
+
+/** admin super_admin va boshqa adminlarni ro'yxatda ko'ra olmaydi */
+const filteredUsers = computed(() => {
+  if (authStore.isSuperAdmin) return users.value
+  return users.value.filter(
+    (u) => u.role !== USER_ROLES.SUPER_ADMIN && u.role !== USER_ROLES.ADMIN,
+  )
+})
 
 const paginationRange = computed(() => {
   const current = pagination.value.page
@@ -373,6 +390,12 @@ function getStatusBadgeClass(isActive: boolean): string {
     : 'bg-red-500/10 text-red-600 dark:text-red-400'
 }
 
+/** Admin o'zidan yuqori roldagi foydalanuvchini tahrirlashi/o'chirishi mumkin emas */
+function canManageUser(user: UserWithGroup): boolean {
+  if (authStore.isSuperAdmin) return true
+  return user.role !== USER_ROLES.SUPER_ADMIN && user.role !== USER_ROLES.ADMIN
+}
+
 function dismissSuccess() {
   successMessage.value = ''
 }
@@ -394,7 +417,7 @@ async function exportUsers() {
     { key: 'is_active', label: 'Holat', transform: (v) => v ? 'Faol' : 'Nofaol' },
     { key: 'created_at', label: 'Yaratilgan', transform: (v) => new Date(v as string).toLocaleDateString('uz-UZ') },
   ]
-  await exportToExcel(users.value, columns, 'foydalanuvchilar')
+  await exportToExcel(filteredUsers.value, columns, 'foydalanuvchilar')
 }
 
 // Auto-dismiss success messages after 3 seconds
@@ -468,7 +491,7 @@ onMounted(async () => {
       <div class="flex items-center gap-2">
         <button
           @click="exportUsers"
-          :disabled="!users.length"
+          :disabled="!filteredUsers.length"
           class="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50 disabled:pointer-events-none"
         >
           <Download class="h-4 w-4" />
@@ -540,7 +563,7 @@ onMounted(async () => {
           </thead>
           <tbody class="divide-y divide-border">
             <tr
-              v-for="user in users"
+              v-for="user in filteredUsers"
               :key="user.id"
               class="hover:bg-muted/30 transition-colors"
             >
@@ -575,7 +598,7 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="whitespace-nowrap px-6 py-4 text-right">
-                <div class="flex items-center justify-end gap-2">
+                <div v-if="canManageUser(user)" class="flex items-center justify-end gap-2">
                   <button
                     @click="openEditSheet(user)"
                     class="inline-flex items-center justify-center rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -595,7 +618,7 @@ onMounted(async () => {
             </tr>
 
             <!-- Empty State -->
-            <tr v-if="users.length === 0">
+            <tr v-if="filteredUsers.length === 0">
               <td colspan="6" class="px-6 py-12 text-center">
                 <p class="text-sm text-muted-foreground">Foydalanuvchilar topilmadi</p>
               </td>

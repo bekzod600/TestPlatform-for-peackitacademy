@@ -66,6 +66,12 @@ export interface UserGroup extends BaseEntity {
   name: string
   description: string | null
   is_active: boolean
+  teacher_id: number | null
+}
+
+/** UserGroup with its assigned teacher eagerly loaded */
+export interface UserGroupWithTeacher extends UserGroup {
+  teacher: SafeUser | null
 }
 
 export type UserGroupInsert = Omit<UserGroup, 'id' | 'created_at' | 'updated_at'>
@@ -391,6 +397,7 @@ export interface QuestionListFilters extends ListFilters {
   question_type?: QuestionType
   difficulty?: DifficultyLevel
   is_active?: boolean
+  created_by?: number
 }
 
 export interface TestListFilters extends ListFilters {

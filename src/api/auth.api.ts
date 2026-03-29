@@ -15,6 +15,32 @@ import { SESSION } from '@/lib/constants'
 import type { ApiResponse, SafeUser, User } from '@/types'
 
 // -------------------------------------------------------------
+// Internal audit log helper (mirrors admin.api.ts version but
+// avoids a circular import by calling supabase directly)
+// -------------------------------------------------------------
+async function writeAuditLog(entry: {
+  user_id?: number | null
+  action: string
+  entity_type?: string | null
+  entity_id?: number | null
+  new_data?: Record<string, unknown> | null
+}): Promise<void> {
+  try {
+    await supabase.from('audit_logs').insert({
+      user_id: entry.user_id ?? null,
+      action: entry.action,
+      entity_type: entry.entity_type ?? null,
+      entity_id: entry.entity_id ?? null,
+      old_data: null,
+      new_data: entry.new_data ?? null,
+      ip_address: null,
+    })
+  } catch {
+    // Audit log xatosi asosiy jarayonni to'xtatmasligi kerak
+  }
+}
+
+// -------------------------------------------------------------
 // Helpers
 // -------------------------------------------------------------
 
@@ -67,7 +93,17 @@ export async function loginUser(
 
     const user = data as User
 
-    const isValidPassword = await bcrypt.compare(password, user.password_hash)
+    // Dual-mode password check: support both bcrypt hashes and legacy plain-text
+    const isBcryptHash = user.password_hash.startsWith('$2')
+    let isValidPassword = false
+
+    if (isBcryptHash) {
+      isValidPassword = await bcrypt.compare(password, user.password_hash)
+    } else {
+      // Legacy plain-text comparison
+      isValidPassword = password === user.password_hash
+    }
+
     if (!isValidPassword) {
       return {
         data: null,
@@ -76,10 +112,17 @@ export async function loginUser(
       }
     }
 
-    // Update last_login_at
+    // If password was plain-text, migrate it to bcrypt hash
+    const updatePayload: Record<string, unknown> = {
+      last_login_at: new Date().toISOString(),
+    }
+    if (!isBcryptHash) {
+      updatePayload.password_hash = await bcrypt.hash(password, 10)
+    }
+
     await supabase
       .from('users')
-      .update({ last_login_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq('id', user.id)
 
     const safeUser = toSafeUser(user)
@@ -89,6 +132,15 @@ export async function loginUser(
     setStoredSession({
       user: safeUser as unknown as Record<string, unknown>,
       token,
+    })
+
+    // Audit: login
+    await writeAuditLog({
+      user_id: safeUser.id,
+      action: 'login',
+      entity_type: 'session',
+      entity_id: safeUser.id,
+      new_data: { username: safeUser.username, role: safeUser.role },
     })
 
     return {
@@ -104,8 +156,17 @@ export async function loginUser(
 
 /**
  * Log out the current user by clearing the stored session.
+ * userId is optional — pass it to write an audit log entry.
  */
-export function logoutUser(): void {
+export async function logoutUser(userId?: number | null): Promise<void> {
+  if (userId) {
+    await writeAuditLog({
+      user_id: userId,
+      action: 'logout',
+      entity_type: 'session',
+      entity_id: userId,
+    })
+  }
   clearStoredSession()
   localStorage.removeItem(SESSION.TEST_STATE_KEY)
 }

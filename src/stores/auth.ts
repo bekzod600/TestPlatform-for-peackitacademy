@@ -4,7 +4,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { SESSION, USER_ROLES, ADMIN_ROLES, TEACHER_AND_ABOVE } from '@/lib/constants'
+import { SESSION, USER_ROLES, ADMIN_ROLES } from '@/lib/constants'
 import type { UserRole } from '@/lib/constants'
 import type { SafeUser } from '@/types'
 import {
@@ -29,12 +29,16 @@ export const useAuthStore = defineStore('auth', () => {
 
   const userRole = computed<UserRole | null>(() => user.value?.role ?? null)
 
+  const isSuperAdmin = computed<boolean>(() =>
+    user.value?.role === USER_ROLES.SUPER_ADMIN,
+  )
+
   const isAdmin = computed<boolean>(() =>
     user.value !== null && (ADMIN_ROLES as readonly string[]).includes(user.value.role),
   )
 
   const isTeacher = computed<boolean>(() =>
-    user.value !== null && (TEACHER_AND_ABOVE as readonly string[]).includes(user.value.role),
+    user.value?.role === USER_ROLES.TEACHER,
   )
 
   const isStudent = computed<boolean>(() =>
@@ -78,10 +82,11 @@ export const useAuthStore = defineStore('auth', () => {
    * Clear user state, remove persisted session data, and redirect
    * to the login page.
    */
-  function logout(): void {
-    logoutUser()
+  async function logout(): Promise<void> {
+    const currentUserId = user.value?.id ?? null
     user.value = null
     token.value = null
+    await logoutUser(currentUserId)
 
     // Redirect via window.location to guarantee a clean navigation
     // even if the Vue Router is not yet available.
@@ -189,6 +194,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     userRole,
+    isSuperAdmin,
     isAdmin,
     isTeacher,
     isStudent,

@@ -1,0 +1,26 @@
+        <button
+          @click="triggerImport"
+          :disabled="isImporting"
+          class="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+        >
+          <Loader2 v-if="isImporting" class="w-4 h-4 animate-spin" />
+          <Upload v-else class="w-4 h-4" />
+          Import
+        </button>
+        <!-- Shablon tugmasi -->
+        <button
+          @click="exportTemplate"
+          class="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+          title="Import uchun bo'sh shablon yuklab olish"
+        >
+          <Download class="w-4 h-4" />
+          Shablon
+        </button>
+        <button
+          @click="exportQuestions"
+          :disabled="!questions.length"
+          class="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50 disabled:pointer-events-none"
+        >
+          <Download class="w-4 h-4" />
+          Excel
+        </button>

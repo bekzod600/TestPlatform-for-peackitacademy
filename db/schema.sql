@@ -57,10 +57,12 @@ CREATE TABLE public.user_groups (
   name TEXT NOT NULL,
   description TEXT,
   is_active BOOLEAN NOT NULL DEFAULT true,
+  teacher_id BIGINT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
   CONSTRAINT user_groups_name_unique UNIQUE (name)
+  -- teacher_id FK added after users table is created (see below)
 );
 
 -- =============================================
@@ -90,6 +92,14 @@ CREATE TABLE public.users (
 CREATE INDEX idx_users_username ON public.users (username);
 CREATE INDEX idx_users_role ON public.users (role);
 CREATE INDEX idx_users_user_group ON public.users (user_group_id);
+
+-- user_groups.teacher_id FK (users jadvali yaratilgandan keyin)
+ALTER TABLE public.user_groups
+  ADD CONSTRAINT user_groups_teacher_fkey
+    FOREIGN KEY (teacher_id) REFERENCES public.users (id)
+    ON DELETE SET NULL;
+
+CREATE INDEX idx_user_groups_teacher ON public.user_groups (teacher_id);
 
 -- =============================================
 -- 5. SESSIYALAR (Sessions)
@@ -502,7 +512,28 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all access" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- =============================================
--- 15. BOSHLANG'ICH MA'LUMOTLAR (Seed Data)
+-- 15. MIGRATION: teacher_id for user_groups
+-- =============================================
+-- Run once. Safe to re-run (IF NOT EXISTS guards).
+ALTER TABLE public.user_groups
+  ADD COLUMN IF NOT EXISTS teacher_id BIGINT;
+
+DO $ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'user_groups_teacher_fkey'
+  ) THEN
+    ALTER TABLE public.user_groups
+      ADD CONSTRAINT user_groups_teacher_fkey
+        FOREIGN KEY (teacher_id) REFERENCES public.users (id)
+        ON DELETE SET NULL;
+  END IF;
+END $;
+
+CREATE INDEX IF NOT EXISTS idx_user_groups_teacher ON public.user_groups (teacher_id);
+CREATE INDEX IF NOT EXISTS idx_tests_created_by    ON public.tests (created_by);
+
+-- =============================================
+-- 16. BOSHLANG'ICH MA'LUMOTLAR (Seed Data)
 -- =============================================
 
 -- Default admin foydalanuvchi (parol: admin123 — bcrypt hash)

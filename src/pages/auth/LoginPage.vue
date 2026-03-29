@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { GraduationCap, Eye, EyeOff, LogIn, Loader2, Sun, Moon } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
-import { TEACHER_AND_ABOVE } from '@/lib/constants'
+import { USER_ROLES, ADMIN_ROLES } from '@/lib/constants'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -31,8 +31,11 @@ async function handleLogin() {
   }
 
   // Rolga qarab yo'naltirish
-  if (authStore.user && (TEACHER_AND_ABOVE as readonly string[]).includes(authStore.user.role)) {
+  const role = authStore.user?.role
+  if (role && (ADMIN_ROLES as readonly string[]).includes(role)) {
     router.push('/admin')
+  } else if (role === USER_ROLES.TEACHER) {
+    router.push('/teacher')
   } else {
     router.push('/student/dashboard')
   }

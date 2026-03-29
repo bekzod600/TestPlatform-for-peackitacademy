@@ -3,13 +3,9 @@ import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   LayoutDashboard,
-  Users,
-  UsersRound,
   FileQuestion,
   ClipboardList,
-  CalendarCheck,
   BarChart3,
-  ScrollText,
   LogOut,
   Menu,
   X,
@@ -17,8 +13,8 @@ import {
   GraduationCap,
   Sun,
   Moon,
-  BookOpen,
-  FolderOpen,
+  UsersRound,
+  CalendarCheck,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -32,16 +28,12 @@ const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(false)
 
 const navItems = [
-  { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
-  { path: '/admin/users', label: 'Foydalanuvchilar', icon: Users },
-  { path: '/admin/user-groups', label: 'Guruhlar', icon: UsersRound },
-  { path: '/admin/subjects', label: 'Fanlar', icon: BookOpen },
-  { path: '/admin/categories', label: 'Kategoriyalar', icon: FolderOpen },
-  { path: '/admin/questions', label: 'Savollar', icon: FileQuestion },
-  { path: '/admin/tests', label: 'Testlar', icon: ClipboardList },
-  { path: '/admin/assignments', label: 'Test tayinlash', icon: CalendarCheck },
-  { path: '/admin/results', label: 'Natijalar', icon: BarChart3 },
-  { path: '/admin/audit-log', label: 'Audit Log', icon: ScrollText },
+  { path: '/teacher', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { path: '/teacher/groups', label: 'Guruhlarim', icon: UsersRound },
+  { path: '/teacher/assignments', label: 'Test biriktirish', icon: CalendarCheck },
+  { path: '/teacher/tests', label: 'Testlar', icon: ClipboardList },
+  { path: '/teacher/questions', label: 'Savollar', icon: FileQuestion },
+  { path: '/teacher/results', label: 'Natijalar', icon: BarChart3 },
 ]
 
 function isActive(item: typeof navItems[0]) {
@@ -97,7 +89,7 @@ function logout() {
           leave-to-class="opacity-0"
         >
           <span v-if="!sidebarCollapsed" class="font-semibold text-sidebar-foreground whitespace-nowrap">
-            Admin Panel
+            O'qituvchi Panel
           </span>
         </Transition>
         <!-- Close button (mobile) -->
@@ -181,11 +173,11 @@ function logout() {
 
           <!-- User info -->
           <div class="hidden sm:flex items-center gap-2 pl-2 border-l border-border">
-            <div class="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-medium">
-              {{ authStore.user?.full_name?.charAt(0)?.toUpperCase() || 'A' }}
+            <div class="flex items-center justify-center w-8 h-8 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-sm font-medium">
+              {{ authStore.user?.full_name?.charAt(0)?.toUpperCase() || 'T' }}
             </div>
             <span class="text-sm font-medium text-foreground">
-              {{ authStore.user?.full_name || 'Admin' }}
+              {{ authStore.user?.full_name || 'Teacher' }}
             </span>
           </div>
         </div>

@@ -6,6 +6,7 @@
 // falls back to raw `supabase` queries for complex operations.
 // =============================================================
 
+import bcrypt from 'bcryptjs'
 import {
   supabase,
   fetchAll,
@@ -27,6 +28,7 @@ import type {
   UserListFilters,
   // User Groups
   UserGroup,
+  UserGroupWithTeacher,
   UserGroupInsert,
   UserGroupUpdate,
   // Subjects
@@ -125,63 +127,124 @@ export async function fetchUserById(
   return { data: toSafe(data as User), error: null, success: true }
 }
 
-/** Create a new user. */
+/** Create a new user. Password is bcrypt-hashed before storing. */
 export async function createUser(
   payload: UserInsert,
+  actorId?: number | null,
 ): Promise<ApiResponse<SafeUser>> {
-  // TODO: Hash password via Edge Function before storing.
-  // For now the plain text password is stored in password_hash column.
-  const result = await insertRow<UserInsert, User>('users', payload)
+  const hashedPayload = {
+    ...payload,
+    password_hash: await bcrypt.hash(payload.password_hash, 10),
+  }
+  const result = await insertRow<UserInsert, User>('users', hashedPayload)
   if (result.success && result.data) {
-    return { data: toSafe(result.data), error: null, success: true }
+    const safe = toSafe(result.data)
+    await logAudit({
+      user_id: actorId,
+      action: 'create',
+      entity_type: 'user',
+      entity_id: safe.id,
+      new_data: { username: safe.username, role: safe.role, full_name: safe.full_name },
+    })
+    return { data: safe, error: null, success: true }
   }
   return { data: null, error: result.error, success: false }
 }
 
-/** Update an existing user. */
+/** Update an existing user. If password_hash is provided, it is bcrypt-hashed first. */
 export async function updateUser(
   id: number,
   payload: UserUpdate,
+  actorId?: number | null,
 ): Promise<ApiResponse<SafeUser>> {
-  const result = await updateRow<UserUpdate, User>('users', id, payload)
+  const finalPayload = { ...payload }
+  if (finalPayload.password_hash) {
+    finalPayload.password_hash = await bcrypt.hash(finalPayload.password_hash, 10)
+  }
+  const result = await updateRow<UserUpdate, User>('users', id, finalPayload)
   if (result.success && result.data) {
-    return { data: toSafe(result.data), error: null, success: true }
+    const safe = toSafe(result.data)
+    const logData: Record<string, unknown> = { ...payload }
+    if (logData.password_hash) logData.password_hash = '***'
+    await logAudit({
+      user_id: actorId,
+      action: 'update',
+      entity_type: 'user',
+      entity_id: id,
+      new_data: logData,
+    })
+    return { data: safe, error: null, success: true }
   }
   return { data: null, error: result.error, success: false }
 }
 
 /** Delete a user by id. */
-export async function deleteUser(id: number): Promise<ApiResponse<null>> {
-  return deleteRow('users', id)
+export async function deleteUser(id: number, actorId?: number | null): Promise<ApiResponse<null>> {
+  const result = await deleteRow('users', id)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'delete', entity_type: 'user', entity_id: id })
+  }
+  return result
 }
 
 // =============================================================
 // USER GROUPS
 // =============================================================
 
-/** Fetch all user groups (unpaginated — typically a small list). */
-export async function fetchUserGroups(): Promise<ApiResponse<UserGroup[]>> {
-  return fetchAll<UserGroup>('user_groups', '*', 'name', true)
+/** Fetch all user groups with their assigned teacher. */
+export async function fetchUserGroups(): Promise<ApiResponse<UserGroupWithTeacher[]>> {
+  return fetchAll<UserGroupWithTeacher>(
+    'user_groups',
+    '*, teacher:users!user_groups_teacher_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at)',
+    'name',
+    true,
+  )
+}
+
+/** Fetch all teachers (role = teacher) for dropdowns. */
+export async function fetchTeachers(): Promise<ApiResponse<SafeUser[]>> {
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at')
+    .eq('role', 'teacher')
+    .eq('is_active', true)
+    .order('full_name', { ascending: true })
+  if (error) return { data: null, error: error.message, success: false }
+  return { data: (data ?? []) as SafeUser[], error: null, success: true }
 }
 
 /** Create a new user group. */
 export async function createUserGroup(
   payload: UserGroupInsert,
+  actorId?: number | null,
 ): Promise<ApiResponse<UserGroup>> {
-  return insertRow<UserGroupInsert, UserGroup>('user_groups', payload)
+  const result = await insertRow<UserGroupInsert, UserGroup>('user_groups', payload)
+  if (result.success && result.data) {
+    await logAudit({ user_id: actorId, action: 'create', entity_type: 'user_group', entity_id: result.data.id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Update a user group. */
 export async function updateUserGroup(
   id: number,
   payload: UserGroupUpdate,
+  actorId?: number | null,
 ): Promise<ApiResponse<UserGroup>> {
-  return updateRow<UserGroupUpdate, UserGroup>('user_groups', id, payload)
+  const result = await updateRow<UserGroupUpdate, UserGroup>('user_groups', id, payload)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'update', entity_type: 'user_group', entity_id: id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Delete a user group. */
-export async function deleteUserGroup(id: number): Promise<ApiResponse<null>> {
-  return deleteRow('user_groups', id)
+export async function deleteUserGroup(id: number, actorId?: number | null): Promise<ApiResponse<null>> {
+  const result = await deleteRow('user_groups', id)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'delete', entity_type: 'user_group', entity_id: id })
+  }
+  return result
 }
 
 // =============================================================
@@ -196,21 +259,35 @@ export async function fetchSubjects(): Promise<ApiResponse<Subject[]>> {
 /** Create a subject. */
 export async function createSubject(
   payload: SubjectInsert,
+  actorId?: number | null,
 ): Promise<ApiResponse<Subject>> {
-  return insertRow<SubjectInsert, Subject>('subjects', payload)
+  const result = await insertRow<SubjectInsert, Subject>('subjects', payload)
+  if (result.success && result.data) {
+    await logAudit({ user_id: actorId, action: 'create', entity_type: 'subject', entity_id: result.data.id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Update a subject. */
 export async function updateSubject(
   id: number,
   payload: SubjectUpdate,
+  actorId?: number | null,
 ): Promise<ApiResponse<Subject>> {
-  return updateRow<SubjectUpdate, Subject>('subjects', id, payload)
+  const result = await updateRow<SubjectUpdate, Subject>('subjects', id, payload)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'update', entity_type: 'subject', entity_id: id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Delete a subject. */
-export async function deleteSubject(id: number): Promise<ApiResponse<null>> {
-  return deleteRow('subjects', id)
+export async function deleteSubject(id: number, actorId?: number | null): Promise<ApiResponse<null>> {
+  const result = await deleteRow('subjects', id)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'delete', entity_type: 'subject', entity_id: id })
+  }
+  return result
 }
 
 // =============================================================
@@ -230,21 +307,35 @@ export async function fetchCategories(): Promise<ApiResponse<CategoryWithSubject
 /** Create a category. */
 export async function createCategory(
   payload: CategoryInsert,
+  actorId?: number | null,
 ): Promise<ApiResponse<Category>> {
-  return insertRow<CategoryInsert, Category>('categories', payload)
+  const result = await insertRow<CategoryInsert, Category>('categories', payload)
+  if (result.success && result.data) {
+    await logAudit({ user_id: actorId, action: 'create', entity_type: 'category', entity_id: result.data.id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Update a category. */
 export async function updateCategory(
   id: number,
   payload: CategoryUpdate,
+  actorId?: number | null,
 ): Promise<ApiResponse<Category>> {
-  return updateRow<CategoryUpdate, Category>('categories', id, payload)
+  const result = await updateRow<CategoryUpdate, Category>('categories', id, payload)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'update', entity_type: 'category', entity_id: id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Delete a category. */
-export async function deleteCategory(id: number): Promise<ApiResponse<null>> {
-  return deleteRow('categories', id)
+export async function deleteCategory(id: number, actorId?: number | null): Promise<ApiResponse<null>> {
+  const result = await deleteRow('categories', id)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'delete', entity_type: 'category', entity_id: id })
+  }
+  return result
 }
 
 // =============================================================
@@ -258,7 +349,7 @@ export async function fetchTests(
   return fetchPaginated<TestWithDetails>(
     'tests',
     filters,
-    '*, subject:subjects(*)',
+    '*, subject:subjects(*), created_by_user:users!tests_created_by_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at)',
     (qb) => {
       let q = qb
       if (filters.subject_id !== undefined) {
@@ -294,21 +385,37 @@ export async function fetchTestById(
 /** Create a test. */
 export async function createTest(
   payload: TestInsert,
+  actorId?: number | null,
 ): Promise<ApiResponse<Test>> {
-  return insertRow<TestInsert, Test>('tests', payload)
+  // actorId is embedded in created_by field if not explicitly passed
+  const resolvedActorId = actorId ?? payload.created_by ?? null
+  const result = await insertRow<TestInsert, Test>('tests', payload)
+  if (result.success && result.data) {
+    await logAudit({ user_id: resolvedActorId, action: 'create', entity_type: 'test', entity_id: result.data.id, new_data: { name: (payload as Record<string, unknown>).name } })
+  }
+  return result
 }
 
 /** Update a test. */
 export async function updateTest(
   id: number,
   payload: TestUpdate,
+  actorId?: number | null,
 ): Promise<ApiResponse<Test>> {
-  return updateRow<TestUpdate, Test>('tests', id, payload)
+  const result = await updateRow<TestUpdate, Test>('tests', id, payload)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'update', entity_type: 'test', entity_id: id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Delete a test. */
-export async function deleteTest(id: number): Promise<ApiResponse<null>> {
-  return deleteRow('tests', id)
+export async function deleteTest(id: number, actorId?: number | null): Promise<ApiResponse<null>> {
+  const result = await deleteRow('tests', id)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'delete', entity_type: 'test', entity_id: id })
+  }
+  return result
 }
 
 // =============================================================
@@ -340,6 +447,9 @@ export async function fetchQuestions(
       if (filters.is_active !== undefined) {
         q = q.eq('is_active', filters.is_active)
       }
+      if (filters.created_by !== undefined) {
+        q = q.eq('created_by', filters.created_by)
+      }
       if (filters.search) {
         q = q.ilike('question_text', `%${filters.search}%`)
       }
@@ -362,21 +472,41 @@ export async function fetchQuestionById(
 /** Create a question (without answer options — create those separately). */
 export async function createQuestion(
   payload: QuestionInsert,
+  actorId?: number | null,
 ): Promise<ApiResponse<Question>> {
-  return insertRow<QuestionInsert, Question>('questions', payload)
+  const result = await insertRow<QuestionInsert, Question>('questions', payload)
+  if (result.success && result.data) {
+    await logAudit({
+      user_id: actorId ?? payload.created_by,
+      action: 'create',
+      entity_type: 'question',
+      entity_id: result.data.id,
+      new_data: { question_text: payload.question_text?.slice(0, 100), difficulty: payload.difficulty },
+    })
+  }
+  return result
 }
 
 /** Update a question. */
 export async function updateQuestion(
   id: number,
   payload: QuestionUpdate,
+  actorId?: number | null,
 ): Promise<ApiResponse<Question>> {
-  return updateRow<QuestionUpdate, Question>('questions', id, payload)
+  const result = await updateRow<QuestionUpdate, Question>('questions', id, payload)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'update', entity_type: 'question', entity_id: id, new_data: payload as Record<string, unknown> })
+  }
+  return result
 }
 
 /** Delete a question (cascading deletes answer_options via DB FK). */
-export async function deleteQuestion(id: number): Promise<ApiResponse<null>> {
-  return deleteRow('questions', id)
+export async function deleteQuestion(id: number, actorId?: number | null): Promise<ApiResponse<null>> {
+  const result = await deleteRow('questions', id)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'delete', entity_type: 'question', entity_id: id })
+  }
+  return result
 }
 
 // =============================================================
@@ -465,6 +595,33 @@ export async function deleteAssignment(id: number): Promise<ApiResponse<null>> {
 // AUDIT LOGS
 // =============================================================
 
+/**
+ * Internal helper — write one row to audit_logs.
+ * Never throws: audit failures must not break main operations.
+ */
+async function logAudit(entry: {
+  user_id?: number | null
+  action: string
+  entity_type?: string | null
+  entity_id?: number | null
+  old_data?: Record<string, unknown> | null
+  new_data?: Record<string, unknown> | null
+}): Promise<void> {
+  try {
+    await supabase.from('audit_logs').insert({
+      user_id: entry.user_id ?? null,
+      action: entry.action,
+      entity_type: entry.entity_type ?? null,
+      entity_id: entry.entity_id ?? null,
+      old_data: entry.old_data ?? null,
+      new_data: entry.new_data ?? null,
+      ip_address: null,
+    })
+  } catch {
+    // Audit log xatosi asosiy jarayonni to'xtatmasligi kerak
+  }
+}
+
 /** Fetch paginated audit logs (read-only). */
 export async function fetchAuditLogs(
   filters: ListFilters = {},
@@ -508,6 +665,202 @@ export async function fetchAttempts(
       return q
     },
   )
+}
+
+// =============================================================
+// TEACHER-SCOPED API
+// =============================================================
+// These functions are used by the teacher panel.
+// All queries are filtered by the teacher's own ID so teachers
+// can only see / manage their own data.
+// =============================================================
+
+/** Fetch all groups assigned to a specific teacher. */
+export async function fetchGroupsByTeacher(
+  teacherId: number,
+): Promise<ApiResponse<UserGroupWithTeacher[]>> {
+  const { data, error } = await supabase
+    .from('user_groups')
+    .select(
+      '*, teacher:users!user_groups_teacher_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at)',
+    )
+    .eq('teacher_id', teacherId)
+    .order('name', { ascending: true })
+
+  if (error) return { data: null, error: error.message, success: false }
+  return { data: (data ?? []) as UserGroupWithTeacher[], error: null, success: true }
+}
+
+/** Teacher creates a new group (teacher_id is auto-set). */
+export async function createGroupAsTeacher(
+  payload: Omit<UserGroupInsert, 'teacher_id'>,
+  teacherId: number,
+): Promise<ApiResponse<UserGroup>> {
+  const result = await insertRow<UserGroupInsert, UserGroup>('user_groups', {
+    ...payload,
+    teacher_id: teacherId,
+  })
+  if (result.success && result.data) {
+    await logAudit({
+      user_id: teacherId,
+      action: 'create',
+      entity_type: 'user_group',
+      entity_id: result.data.id,
+      new_data: { name: payload.name, teacher_id: teacherId },
+    })
+  }
+  return result
+}
+
+/** Teacher updates their own group. */
+export async function updateGroupAsTeacher(
+  id: number,
+  payload: UserGroupUpdate,
+  teacherId: number,
+): Promise<ApiResponse<UserGroup>> {
+  // Verify ownership before update
+  const { data: existing } = await supabase
+    .from('user_groups')
+    .select('teacher_id')
+    .eq('id', id)
+    .single()
+  if (!existing || existing.teacher_id !== teacherId) {
+    return { data: null, error: 'Bu guruh sizga tegishli emas', success: false }
+  }
+  const result = await updateRow<UserGroupUpdate, UserGroup>('user_groups', id, payload)
+  if (result.success) {
+    await logAudit({
+      user_id: teacherId,
+      action: 'update',
+      entity_type: 'user_group',
+      entity_id: id,
+      new_data: payload as Record<string, unknown>,
+    })
+  }
+  return result
+}
+
+/** Teacher deletes their own group. */
+export async function deleteGroupAsTeacher(
+  id: number,
+  teacherId: number,
+): Promise<ApiResponse<null>> {
+  const { data: existing } = await supabase
+    .from('user_groups')
+    .select('teacher_id')
+    .eq('id', id)
+    .single()
+  if (!existing || existing.teacher_id !== teacherId) {
+    return { data: null, error: 'Bu guruh sizga tegishli emas', success: false }
+  }
+  const result = await deleteRow('user_groups', id)
+  if (result.success) {
+    await logAudit({
+      user_id: teacherId,
+      action: 'delete',
+      entity_type: 'user_group',
+      entity_id: id,
+    })
+  }
+  return result
+}
+
+/** Fetch paginated assignments for the teacher's own groups. */
+export async function fetchAssignmentsByTeacher(
+  teacherId: number,
+): Promise<ApiResponse<TestAssignmentWithDetails[]>> {
+  // First get group IDs belonging to this teacher
+  const { data: groups, error: gErr } = await supabase
+    .from('user_groups')
+    .select('id')
+    .eq('teacher_id', teacherId)
+
+  if (gErr) return { data: null, error: gErr.message, success: false }
+  const groupIds = (groups ?? []).map((g: { id: number }) => g.id)
+
+  if (groupIds.length === 0) {
+    return { data: [], error: null, success: true }
+  }
+
+  const { data, error } = await supabase
+    .from('test_assignments')
+    .select('*, test:tests(*), user_group:user_groups(*)')
+    .in('user_group_id', groupIds)
+    .order('created_at', { ascending: false })
+
+  if (error) return { data: null, error: error.message, success: false }
+  return { data: (data ?? []) as TestAssignmentWithDetails[], error: null, success: true }
+}
+
+/** Teacher creates an assignment for their own group using their own test. */
+export async function createAssignmentAsTeacher(
+  payload: TestAssignmentInsert,
+  teacherId: number,
+): Promise<ApiResponse<TestAssignment>> {
+  // Verify the test belongs to this teacher
+  const { data: test } = await supabase
+    .from('tests')
+    .select('created_by')
+    .eq('id', payload.test_id)
+    .single()
+  if (!test || test.created_by !== teacherId) {
+    return { data: null, error: 'Bu test sizga tegishli emas', success: false }
+  }
+  // Verify the group belongs to this teacher
+  const { data: group } = await supabase
+    .from('user_groups')
+    .select('teacher_id')
+    .eq('id', payload.user_group_id)
+    .single()
+  if (!group || group.teacher_id !== teacherId) {
+    return { data: null, error: 'Bu guruh sizga tegishli emas', success: false }
+  }
+
+  const result = await insertRow<TestAssignmentInsert, TestAssignment>(
+    'test_assignments',
+    { ...payload, assigned_by: teacherId },
+  )
+  if (result.success && result.data) {
+    await logAudit({
+      user_id: teacherId,
+      action: 'assign_test',
+      entity_type: 'test_assignment',
+      entity_id: result.data.id,
+      new_data: {
+        test_id: payload.test_id,
+        user_group_id: payload.user_group_id,
+        start_time: payload.start_time,
+        end_time: payload.end_time,
+      },
+    })
+  }
+  return result
+}
+
+/** Teacher removes their own assignment. */
+export async function deleteAssignmentAsTeacher(
+  id: number,
+  teacherId: number,
+): Promise<ApiResponse<null>> {
+  // Verify assigned_by matches
+  const { data: existing } = await supabase
+    .from('test_assignments')
+    .select('assigned_by')
+    .eq('id', id)
+    .single()
+  if (!existing || existing.assigned_by !== teacherId) {
+    return { data: null, error: 'Bu tayinlash sizga tegishli emas', success: false }
+  }
+  const result = await deleteRow('test_assignments', id)
+  if (result.success) {
+    await logAudit({
+      user_id: teacherId,
+      action: 'delete',
+      entity_type: 'test_assignment',
+      entity_id: id,
+    })
+  }
+  return result
 }
 
 // =============================================================

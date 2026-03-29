@@ -17,7 +17,6 @@ import {
   updateTest,
   deleteTest,
   fetchSubjects,
-  fetchTeachers,
 } from '@/api/admin.api'
 import { useAuthStore } from '@/stores/auth'
 import { PAGINATION } from '@/lib/constants'
@@ -28,15 +27,18 @@ import type {
   TestUpdate,
   TestListFilters,
   PaginatedResponse,
-  SafeUser,
 } from '@/types'
+
+// ---------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------
+
+const auth = useAuthStore()
 
 // ---------------------------------------------------------------
 // State
 // ---------------------------------------------------------------
 
-const authStore = useAuthStore()
-const teachers = ref<SafeUser[]>([])
 const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
@@ -131,7 +133,10 @@ async function loadTests() {
   errorMessage.value = ''
 
   try {
-    const result: PaginatedResponse<TestWithDetails> = await fetchTests(filters)
+    const result: PaginatedResponse<TestWithDetails> = await fetchTests({
+      ...filters,
+      created_by: auth.user?.id,
+    })
     if (result.success) {
       tests.value = result.data
       pagination.value = result.pagination
@@ -154,17 +159,6 @@ async function loadSubjects() {
     }
   } catch (err) {
     console.error('Failed to load subjects:', err)
-  }
-}
-
-async function loadTeachers() {
-  try {
-    const result = await fetchTeachers()
-    if (result.success && result.data) {
-      teachers.value = result.data
-    }
-  } catch (err) {
-    console.error('Failed to load teachers:', err)
   }
 }
 
@@ -314,7 +308,7 @@ async function handleSubmit() {
         is_active: form.is_active,
       }
 
-      const result = await updateTest(editingTest.value.id, payload, authStore.user?.id ?? null)
+      const result = await updateTest(editingTest.value.id, payload)
       if (result.success) {
         successMessage.value = 'Test muvaffaqiyatli yangilandi'
         closeSheet()
@@ -336,10 +330,10 @@ async function handleSubmit() {
         show_results: form.show_results,
         max_attempts: form.max_attempts,
         is_active: form.is_active,
-        created_by: form.created_by,
+        created_by: auth.user?.id ?? null,
       }
 
-      const result = await createTest(payload, authStore.user?.id ?? null)
+      const result = await createTest(payload)
       if (result.success) {
         successMessage.value = "Test muvaffaqiyatli qo'shildi"
         closeSheet()
@@ -378,7 +372,7 @@ async function confirmDelete() {
   successMessage.value = ''
 
   try {
-    const result = await deleteTest(testToDelete.value.id, authStore.user?.id ?? null)
+    const result = await deleteTest(testToDelete.value.id)
     if (result.success) {
       successMessage.value = "Test muvaffaqiyatli o'chirildi"
       closeDeleteModal()
@@ -433,7 +427,7 @@ watch(successMessage, (val) => {
 // ---------------------------------------------------------------
 
 onMounted(async () => {
-  await Promise.all([loadTests(), loadSubjects(), loadTeachers()])
+  await Promise.all([loadTests(), loadSubjects()])
 })
 </script>
 
@@ -550,9 +544,6 @@ onMounted(async () => {
                 Urinishlar
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Muallif
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Holat
               </th>
               <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -600,11 +591,6 @@ onMounted(async () => {
                 </span>
               </td>
               <td class="whitespace-nowrap px-6 py-4">
-                <span class="text-sm text-muted-foreground">
-                  {{ test.created_by_user?.full_name || '—' }}
-                </span>
-              </td>
-              <td class="whitespace-nowrap px-6 py-4">
                 <span
                   :class="['inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium', getStatusBadgeClass(test.is_active)]"
                 >
@@ -633,7 +619,7 @@ onMounted(async () => {
 
             <!-- Empty State -->
             <tr v-if="tests.length === 0">
-              <td colspan="9" class="px-6 py-12 text-center">
+              <td colspan="8" class="px-6 py-12 text-center">
                 <p class="text-sm text-muted-foreground">Testlar topilmadi</p>
               </td>
             </tr>
@@ -885,28 +871,6 @@ onMounted(async () => {
                         {{ formErrors.max_attempts }}
                       </p>
                     </div>
-                  </div>
-
-                  <!-- Created by (admin only) -->
-                  <div class="space-y-2">
-                    <label for="test_created_by" class="text-sm font-medium text-foreground">
-                      Muallif (O'qituvchi)
-                      <span class="font-normal text-muted-foreground">(ixtiyoriy)</span>
-                    </label>
-                    <select
-                      id="test_created_by"
-                      v-model="form.created_by"
-                      class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                    >
-                      <option :value="null">— Tayinlanmagan —</option>
-                      <option
-                        v-for="t in teachers"
-                        :key="t.id"
-                        :value="t.id"
-                      >
-                        {{ t.full_name }} ({{ t.username }})
-                      </option>
-                    </select>
                   </div>
 
                   <!-- Checkboxes -->

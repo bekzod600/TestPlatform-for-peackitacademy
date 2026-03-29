@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   UsersRound,
   Plus,
@@ -8,17 +8,23 @@ import {
   X,
   Loader2,
   Search,
+  UserCheck,
 } from 'lucide-vue-next'
 import {
   fetchUserGroups,
   createUserGroup,
   updateUserGroup,
   deleteUserGroup,
+  fetchTeachers,
 } from '@/api/admin.api'
-import type { UserGroup, UserGroupInsert } from '@/types'
+import { useAuthStore } from '@/stores/auth'
+import type { UserGroupWithTeacher, UserGroupInsert, SafeUser } from '@/types'
+
+const authStore = useAuthStore()
 
 const isLoading = ref(true)
-const groups = ref<UserGroup[]>([])
+const groups = ref<UserGroupWithTeacher[]>([])
+const teachers = ref<SafeUser[]>([])
 const showForm = ref(false)
 const editingId = ref<number | null>(null)
 const isSaving = ref(false)
@@ -26,16 +32,19 @@ const searchQuery = ref('')
 const showDeleteModal = ref(false)
 const deletingId = ref<number | null>(null)
 const isDeleting = ref(false)
+const errorMessage = ref('')
 
 const form = ref<UserGroupInsert>({
   name: '',
   description: '',
   is_active: true,
+  teacher_id: null,
 })
 
 function resetForm() {
-  form.value = { name: '', description: '', is_active: true }
+  form.value = { name: '', description: '', is_active: true, teacher_id: null }
   editingId.value = null
+  errorMessage.value = ''
 }
 
 function openCreate() {
@@ -43,13 +52,15 @@ function openCreate() {
   showForm.value = true
 }
 
-function openEdit(group: UserGroup) {
+function openEdit(group: UserGroupWithTeacher) {
   editingId.value = group.id
   form.value = {
     name: group.name,
     description: group.description ?? '',
     is_active: group.is_active,
+    teacher_id: group.teacher_id,
   }
+  errorMessage.value = ''
   showForm.value = true
 }
 
@@ -61,10 +72,12 @@ function confirmDelete(id: number) {
 async function loadGroups() {
   isLoading.value = true
   try {
-    const result = await fetchUserGroups()
-    if (result.success && result.data) {
-      groups.value = result.data
-    }
+    const [groupResult, teacherResult] = await Promise.all([
+      fetchUserGroups(),
+      fetchTeachers(),
+    ])
+    if (groupResult.success && groupResult.data) groups.value = groupResult.data
+    if (teacherResult.success && teacherResult.data) teachers.value = teacherResult.data
   } catch (err) {
     console.error('Error loading groups:', err)
   } finally {
@@ -75,17 +88,24 @@ async function loadGroups() {
 async function saveGroup() {
   if (!form.value.name.trim()) return
   isSaving.value = true
+  errorMessage.value = ''
   try {
+    let result
     if (editingId.value) {
-      await updateUserGroup(editingId.value, form.value)
+      result = await updateUserGroup(editingId.value, form.value, authStore.user?.id ?? null)
     } else {
-      await createUserGroup(form.value)
+      result = await createUserGroup(form.value, authStore.user?.id ?? null)
+    }
+    if (!result.success) {
+      errorMessage.value = result.error ?? 'Xatolik yuz berdi'
+      return
     }
     showForm.value = false
     resetForm()
     await loadGroups()
   } catch (err) {
     console.error('Error saving group:', err)
+    errorMessage.value = 'Kutilmagan xatolik yuz berdi'
   } finally {
     isSaving.value = false
   }
@@ -95,7 +115,7 @@ async function handleDelete() {
   if (!deletingId.value) return
   isDeleting.value = true
   try {
-    await deleteUserGroup(deletingId.value)
+    await deleteUserGroup(deletingId.value, authStore.user?.id ?? null)
     showDeleteModal.value = false
     deletingId.value = null
     await loadGroups()
@@ -106,14 +126,13 @@ async function handleDelete() {
   }
 }
 
-import { computed } from 'vue'
-
 const filtered = computed(() => {
   if (!searchQuery.value.trim()) return groups.value
   const q = searchQuery.value.toLowerCase()
   return groups.value.filter(g =>
     g.name.toLowerCase().includes(q) ||
-    g.description?.toLowerCase().includes(q)
+    g.description?.toLowerCase().includes(q) ||
+    g.teacher?.full_name?.toLowerCase().includes(q)
   )
 })
 
@@ -175,6 +194,11 @@ onMounted(loadGroups)
           <div class="min-w-0">
             <p class="text-sm font-medium text-foreground truncate">{{ group.name }}</p>
             <p v-if="group.description" class="text-xs text-muted-foreground truncate">{{ group.description }}</p>
+            <p v-if="group.teacher" class="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+              <UserCheck class="w-3 h-3" />
+              {{ group.teacher.full_name }}
+            </p>
+            <p v-else class="text-xs text-muted-foreground/50 mt-0.5">O'qituvchi tayinlanmagan</p>
           </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
@@ -225,6 +249,14 @@ onMounted(loadGroups)
 
             <!-- Form -->
             <form @submit.prevent="saveGroup" class="flex-1 overflow-y-auto p-6 space-y-4">
+              <!-- Error -->
+              <div
+                v-if="errorMessage"
+                class="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400"
+              >
+                {{ errorMessage }}
+              </div>
+
               <div class="space-y-2">
                 <label class="text-sm font-medium text-foreground">Nomi</label>
                 <input
@@ -244,6 +276,27 @@ onMounted(loadGroups)
                   rows="3"
                   class="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 min-h-[80px] resize-y"
                 />
+              </div>
+
+              <!-- Teacher select -->
+              <div class="space-y-2">
+                <label class="text-sm font-medium text-foreground">
+                  O'qituvchi
+                  <span class="font-normal text-muted-foreground">(ixtiyoriy)</span>
+                </label>
+                <select
+                  v-model="form.teacher_id"
+                  class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option :value="null">— Tayinlanmagan —</option>
+                  <option
+                    v-for="t in teachers"
+                    :key="t.id"
+                    :value="t.id"
+                  >
+                    {{ t.full_name }} ({{ t.username }})
+                  </option>
+                </select>
               </div>
 
               <div class="flex items-center gap-2">

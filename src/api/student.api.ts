@@ -174,6 +174,8 @@ export async function startTestAttempt(
       .in('status', [
         ATTEMPT_STATUSES.COMPLETED,
         ATTEMPT_STATUSES.TIMED_OUT,
+        ATTEMPT_STATUSES.VIOLATION,
+        ATTEMPT_STATUSES.CANCELLED,
       ])
 
     if ((attemptCount ?? 0) >= test.max_attempts) {
