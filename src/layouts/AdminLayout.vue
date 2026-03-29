@@ -60,7 +60,7 @@ function logout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background">
+  <div class="min-h-[100svh] bg-background">
     <!-- Mobile overlay -->
     <Transition
       enter-active-class="transition-opacity duration-300"
