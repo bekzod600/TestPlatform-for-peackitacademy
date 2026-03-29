@@ -41,7 +41,7 @@ function logout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background flex flex-col">
+  <div class="min-[100svh] bg-background flex flex-col">
     <!-- Top Navbar -->
     <header class="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border">
       <div class="max-w-7xl mx-auto flex items-center justify-between h-16 px-4 lg:px-6">
