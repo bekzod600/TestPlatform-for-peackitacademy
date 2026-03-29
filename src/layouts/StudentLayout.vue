@@ -4,7 +4,6 @@ import { useRouter, useRoute } from 'vue-router'
 import {
   GraduationCap,
   LayoutDashboard,
-  ClipboardList,
   BarChart3,
   LogOut,
   Menu,
@@ -24,7 +23,6 @@ const mobileMenuOpen = ref(false)
 
 const navItems = [
   { path: '/student/dashboard', label: 'Bosh sahifa', icon: LayoutDashboard },
-  { path: '/student/test', label: 'Test', icon: ClipboardList },
   { path: '/student/results', label: 'Natijalar', icon: BarChart3 },
 ]
 

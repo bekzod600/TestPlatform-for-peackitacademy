@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Clock,
@@ -11,6 +11,7 @@ import {
   Loader2,
   ShieldAlert,
   Eye,
+  ClipboardList,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useStudentTestStore } from '@/stores/student/test'
@@ -92,6 +93,13 @@ watch(() => timer.timeRemaining.value, (val) => {
   }
 })
 
+// Prevent page refresh/close during test
+function handleBeforeUnload(e: BeforeUnloadEvent) {
+  e.preventDefault()
+  e.returnValue = '' // Chrome requires returnValue to be set
+  return 'Test hali yakunlanmagan! Sahifadan chiqsangiz test bekor qilinadi.'
+}
+
 // Init
 async function initTest() {
   isLoading.value = true
@@ -104,6 +112,10 @@ async function initTest() {
     timer.timeRemaining.value = testStore.activeTest.time_remaining_seconds
     timer.start()
     security.activate()
+
+    // Add beforeunload listener
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
     isLoading.value = false
     return
   }
@@ -142,6 +154,9 @@ async function initTest() {
     timer.timeRemaining.value = testStore.activeTest.time_remaining_seconds
     timer.start()
     security.activate()
+
+    // Add beforeunload listener
+    window.addEventListener('beforeunload', handleBeforeUnload)
   } catch (err) {
     console.error('Test init error:', err)
     router.push('/student/dashboard')
@@ -151,19 +166,24 @@ async function initTest() {
 }
 
 onMounted(initTest)
+
+// Cleanup on unmount
+onUnmounted(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
 </script>
 
 <template>
   <!-- Loading -->
-  <div v-if="isLoading" class="min-h-screen flex items-center justify-center bg-background">
+  <div v-if="isLoading" class="fixed inset-0 flex items-center justify-center bg-background z-50">
     <div class="text-center">
-      <Loader2 class="w-8 h-8 animate-spin text-primary mx-auto" />
-      <p class="text-sm text-muted-foreground mt-3">Test yuklanmoqda...</p>
+      <Loader2 class="w-10 h-10 animate-spin text-primary mx-auto" />
+      <p class="text-sm text-muted-foreground mt-4">Test yuklanmoqda...</p>
     </div>
   </div>
 
   <!-- Test Interface -->
-  <div v-else class="min-h-screen bg-background">
+  <div v-else class="fixed inset-0 flex flex-col bg-background">
     <!-- Violation Warning Banner -->
     <Transition
       enter-active-class="transition-all duration-300"
@@ -173,112 +193,154 @@ onMounted(initTest)
     >
       <div
         v-if="violationWarning"
-        class="fixed top-0 left-0 right-0 z-50 bg-destructive text-destructive-foreground px-4 py-3 text-center text-sm font-medium flex items-center justify-center gap-2"
+        class="fixed top-0 left-0 right-0 z-[60] bg-destructive text-destructive-foreground px-4 py-3 text-center text-sm font-medium flex items-center justify-center gap-2 shadow-lg"
       >
-        <ShieldAlert class="w-4 h-4" />
+        <ShieldAlert class="w-5 h-5" />
         {{ violationWarning }}
       </div>
     </Transition>
 
-    <!-- Top Bar -->
-    <header class="sticky top-0 z-40 bg-card border-b border-border">
-      <div class="max-w-4xl mx-auto flex items-center justify-between h-14 px-4">
-        <!-- Question counter -->
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-foreground">
-            Savol {{ currentIndex + 1 }} / {{ totalQuestions }}
-          </span>
+    <!-- Top Bar (Compact & Clean) -->
+    <header class="flex-shrink-0 bg-card border-b border-border shadow-sm">
+      <div class="max-w-5xl mx-auto flex items-center justify-between h-16 px-4 lg:px-6">
+        <!-- Test Title & Question Counter -->
+        <div class="flex items-center gap-4 min-w-0">
+          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 shrink-0">
+            <ClipboardList class="w-5 h-5 text-primary" />
+          </div>
+          <div class="min-w-0">
+            <p class="text-xs text-muted-foreground">Test davom etmoqda</p>
+            <p class="text-sm font-semibold text-foreground truncate">
+              Savol {{ currentIndex + 1 }} / {{ totalQuestions }}
+            </p>
+          </div>
         </div>
 
-        <!-- Timer -->
+        <!-- Timer (Center) -->
         <div
           :class="[
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-mono font-bold',
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-base font-mono font-bold',
             timer.isCritical.value && 'bg-destructive/10 text-destructive animate-pulse',
             timer.isWarning.value && !timer.isCritical.value && 'bg-warning/10 text-warning',
             !timer.isWarning.value && 'bg-muted text-foreground',
           ]"
         >
-          <Clock class="w-4 h-4" />
+          <Clock class="w-5 h-5" />
           {{ timer.formattedTime.value }}
         </div>
 
-        <!-- Answered counter -->
-        <div class="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <CheckCircle2 class="w-4 h-4" />
-          <span>{{ answeredCount }}/{{ totalQuestions }}</span>
+        <!-- Answered Counter -->
+        <div class="flex items-center gap-2 text-sm">
+          <div class="hidden sm:flex items-center gap-1.5 text-muted-foreground">
+            <CheckCircle2 class="w-4 h-4" />
+            <span class="font-medium">{{ answeredCount }}/{{ totalQuestions }}</span>
+          </div>
         </div>
       </div>
 
       <!-- Progress bar -->
       <div class="h-1 bg-muted">
         <div
-          class="h-full bg-primary transition-all duration-300 ease-out"
+          class="h-full bg-gradient-to-r from-primary to-primary/70 transition-all duration-300 ease-out"
           :style="{ width: `${progress}%` }"
         />
       </div>
     </header>
 
-    <!-- Main Content -->
-    <div class="max-w-4xl mx-auto px-4 py-6 space-y-6">
-      <!-- Question Card -->
-      <div v-if="currentQuestion" class="animate-fade-in">
-        <div class="rounded-xl border border-border bg-card p-6">
-          <!-- Question text -->
-          <div class="mb-6">
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-medium mb-3">
-              {{ currentIndex + 1 }}-savol
-            </span>
-            <p class="text-lg font-medium text-foreground leading-relaxed">
-              {{ currentQuestion.question_text }}
-            </p>
-          </div>
+    <!-- Main Content (Scrollable) -->
+    <div class="flex-1 overflow-y-auto">
+      <div class="max-w-5xl mx-auto px-4 lg:px-6 py-6 space-y-6">
+        <!-- Question Card -->
+        <div v-if="currentQuestion" class="animate-fade-in">
+          <div class="rounded-xl border border-border bg-card p-6 lg:p-8 shadow-sm">
+            <!-- Question Header -->
+            <div class="mb-6">
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-4">
+                Savol {{ currentIndex + 1 }}
+              </span>
+              <p class="text-lg lg:text-xl font-medium text-foreground leading-relaxed">
+                {{ currentQuestion.question_text }}
+              </p>
+            </div>
 
-          <!-- Answer Options -->
-          <div class="space-y-3">
-            <button
-              v-for="(option, idx) in currentQuestion.answer_options"
-              :key="option.id"
-              @click="selectAnswer(currentQuestion.id, option.id)"
-              :class="[
-                'w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all duration-200',
-                selectedAnswers[currentQuestion.id] === option.id
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : 'border-border hover:border-primary/30 hover:bg-accent/50'
-              ]"
-            >
-              <!-- Option letter -->
-              <span
+            <!-- Answer Options -->
+            <div class="space-y-3">
+              <button
+                v-for="(option, idx) in currentQuestion.answer_options"
+                :key="option.id"
+                @click="selectAnswer(currentQuestion.id, option.id)"
                 :class="[
-                  'flex items-center justify-center w-8 h-8 rounded-lg text-sm font-bold shrink-0 transition-colors',
+                  'w-full flex items-center gap-4 p-4 lg:p-5 rounded-xl border-2 text-left transition-all duration-200',
                   selectedAnswers[currentQuestion.id] === option.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground'
+                    ? 'border-primary bg-primary/5 shadow-md scale-[1.02]'
+                    : 'border-border hover:border-primary/50 hover:bg-accent/50 hover:shadow-sm'
                 ]"
               >
-                {{ String.fromCharCode(65 + idx) }}
-              </span>
-              <span class="text-sm text-foreground">{{ option.option_text }}</span>
+                <!-- Option letter -->
+                <span
+                  :class="[
+                    'flex items-center justify-center w-10 h-10 rounded-lg text-base font-bold shrink-0 transition-colors',
+                    selectedAnswers[currentQuestion.id] === option.id
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground'
+                  ]"
+                >
+                  {{ String.fromCharCode(65 + idx) }}
+                </span>
+                <span class="text-sm lg:text-base text-foreground flex-1">{{ option.option_text }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Question Grid Navigation -->
+        <div class="rounded-xl border border-border bg-card p-5 shadow-sm">
+          <p class="text-xs font-medium text-muted-foreground mb-4 flex items-center gap-2">
+            <Eye class="w-4 h-4" />
+            Savollar navigatsiyasi
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-for="(q, idx) in (testStore.activeTest?.questions ?? [])"
+              :key="q.id"
+              @click="goToQuestion(idx)"
+              :class="[
+                'w-10 h-10 rounded-lg text-sm font-medium transition-all',
+                idx === currentIndex && 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-110',
+                selectedAnswers[q.id] !== undefined && selectedAnswers[q.id] !== null
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:scale-105',
+              ]"
+            >
+              {{ idx + 1 }}
             </button>
           </div>
         </div>
       </div>
+    </div>
 
-      <!-- Navigation Buttons -->
-      <div class="flex items-center justify-between">
+    <!-- Bottom Navigation Bar (Sticky) -->
+    <div class="flex-shrink-0 bg-card border-t border-border shadow-lg">
+      <div class="max-w-5xl mx-auto flex items-center justify-between px-4 lg:px-6 py-4">
         <button
           @click="previousQuestion"
           :disabled="isFirstQuestion"
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 disabled:opacity-40 disabled:pointer-events-none transition-colors"
         >
           <ChevronLeft class="w-4 h-4" />
-          Oldingi
+          <span class="hidden sm:inline">Oldingi</span>
         </button>
+
+        <!-- Mobile answered count -->
+        <div class="sm:hidden flex items-center gap-1.5 text-sm text-muted-foreground">
+          <CheckCircle2 class="w-4 h-4" />
+          <span class="font-medium">{{ answeredCount }}/{{ totalQuestions }}</span>
+        </div>
 
         <button
           v-if="isLastQuestion"
           @click="showFinishModal = true"
-          class="inline-flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium bg-success text-success-foreground hover:bg-success/90 transition-colors shadow-sm"
+          class="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium bg-success text-success-foreground hover:bg-success/90 transition-colors shadow-md"
         >
           <Send class="w-4 h-4" />
           Yakunlash
@@ -286,35 +348,11 @@ onMounted(initTest)
         <button
           v-else
           @click="nextQuestion"
-          class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-md"
         >
-          Keyingi
+          <span class="hidden sm:inline">Keyingi</span>
           <ChevronRight class="w-4 h-4" />
         </button>
-      </div>
-
-      <!-- Question Grid Navigation -->
-      <div class="rounded-xl border border-border bg-card p-4">
-        <p class="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1">
-          <Eye class="w-3.5 h-3.5" />
-          Savollar navigatsiyasi
-        </p>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="(q, idx) in (testStore.activeTest?.questions ?? [])"
-            :key="q.id"
-            @click="goToQuestion(idx)"
-            :class="[
-              'w-9 h-9 rounded-lg text-xs font-medium transition-all',
-              idx === currentIndex && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
-              selectedAnswers[q.id] !== undefined && selectedAnswers[q.id] !== null
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground hover:bg-accent',
-            ]"
-          >
-            {{ idx + 1 }}
-          </button>
-        </div>
       </div>
     </div>
 

@@ -1,5 +1,6 @@
 import type { NavigationGuardWithThis } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useStudentTestStore } from '@/stores/student/test'
 import { USER_ROLES, ADMIN_ROLES } from '@/lib/constants'
 
 /**
@@ -22,9 +23,33 @@ function getHomePath(role: string): string {
  * 5. Teacher guard — block non-teacher from /teacher
  * 6. Student guard — block non-student from /student
  */
-export const globalBeforeEach: NavigationGuardWithThis<undefined> = (to, _from, next) => {
+export const globalBeforeEach: NavigationGuardWithThis<undefined> = (to, from, next) => {
   const authStore = useAuthStore()
+  const testStore = useStudentTestStore()
   const role = authStore.user?.role
+
+  // --- Test mode protection: prevent navigation away from active test ---
+  if (testStore.isActive && from.path === '/student/test' && to.path !== '/student/test') {
+    // User is trying to leave an active test - block it
+    const confirmed = window.confirm(
+      'Test hali yakunlanmagan! Agar sahifadan chiqsangiz, test avtomatik bekor qilinadi. Davom etmoqchimisiz?'
+    )
+    if (!confirmed) {
+      next(false) // Block navigation
+      return
+    } else {
+      // User confirmed - cancel the test
+      testStore.clearTest()
+      // Continue with navigation
+    }
+  }
+
+  // --- Prevent direct access to test page without active test ---
+  if (to.path === '/student/test' && !testStore.isActive && from.path !== '/student/dashboard') {
+    // Redirect to dashboard if trying to access test page without active test
+    next('/student/dashboard')
+    return
+  }
 
   // --- Root redirect: send to correct panel based on role ---
   if (to.path === '/') {

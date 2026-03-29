@@ -184,12 +184,18 @@ onMounted(loadResults)
       </div>
 
       <!-- Empty State -->
-      <div v-if="!attempts.length" class="text-center py-16">
+      <div v-if="!attempts.length" class="rounded-xl border border-border bg-card p-8 lg:p-12 text-center">
         <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
           <ClipboardList class="w-8 h-8 text-muted-foreground" />
         </div>
         <h3 class="text-lg font-semibold text-foreground">Hali natijalar yo'q</h3>
-        <p class="text-sm text-muted-foreground mt-1">Birinchi testingizni topshiring!</p>
+        <p class="text-sm text-muted-foreground mt-1 mb-4">Birinchi testingizni topshiring!</p>
+        <button
+          @click="$router.push('/student/dashboard')"
+          class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors"
+        >
+          Testlarga o'tish
+        </button>
       </div>
 
       <template v-else>
@@ -262,40 +268,43 @@ onMounted(loadResults)
             <!-- Result Header (clickable) -->
             <button
               @click="toggleDetails(attempt.id)"
-              class="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors text-left"
+              class="w-full flex items-center justify-between p-4 lg:p-5 hover:bg-muted/50 transition-colors text-left"
             >
-              <div class="flex items-center gap-4 min-w-0">
+              <div class="flex items-center gap-3 lg:gap-4 min-w-0 flex-1">
                 <!-- Score circle -->
                 <div
                   :class="[
-                    'flex items-center justify-center w-12 h-12 rounded-full text-sm font-bold shrink-0',
+                    'flex items-center justify-center w-12 h-12 lg:w-14 lg:h-14 rounded-full text-sm lg:text-base font-bold shrink-0',
                     getScoreBg(attempt.percentage ?? 0),
                     getScoreColor(attempt.percentage ?? 0),
                   ]"
                 >
                   {{ Math.round(attempt.percentage ?? 0) }}%
                 </div>
-                <div class="min-w-0">
-                  <p class="text-sm font-medium text-foreground truncate">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm lg:text-base font-medium text-foreground truncate">
                     {{ attempt.test?.name || 'Test' }}
                   </p>
-                  <div class="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                  <div class="flex flex-wrap items-center gap-2 lg:gap-3 text-xs text-muted-foreground mt-1">
                     <span class="flex items-center gap-1">
                       <Clock class="w-3 h-3" />
                       {{ new Date(attempt.started_at).toLocaleDateString('uz-UZ') }}
                     </span>
-                    <span>{{ attempt.correct_answers }}/{{ attempt.total_questions }} to'g'ri</span>
+                    <span class="hidden sm:inline">{{ attempt.correct_answers }}/{{ attempt.total_questions }} to'g'ri</span>
                     <span :class="['px-1.5 py-0.5 rounded-full text-[10px] font-medium', getStatusColor(attempt.status)]">
                       {{ getStatusLabel(attempt.status) }}
                     </span>
                   </div>
                 </div>
               </div>
-              <ChevronDown
-                v-if="expandedAttemptId !== attempt.id"
-                class="w-4 h-4 text-muted-foreground shrink-0"
-              />
-              <ChevronUp v-else class="w-4 h-4 text-muted-foreground shrink-0" />
+              <div class="flex items-center gap-3 shrink-0 ml-2">
+                <span class="sm:hidden text-xs text-muted-foreground">{{ attempt.correct_answers }}/{{ attempt.total_questions }}</span>
+                <ChevronDown
+                  v-if="expandedAttemptId !== attempt.id"
+                  class="w-4 h-4 text-muted-foreground"
+                />
+                <ChevronUp v-else class="w-4 h-4 text-muted-foreground" />
+              </div>
             </button>
 
             <!-- Expanded Details -->

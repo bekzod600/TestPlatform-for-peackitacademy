@@ -15,6 +15,8 @@ declare module 'vue-router' {
     requiresTeacher?: boolean
     /** Page title shown in the document / breadcrumbs. */
     title?: string
+    /** Route is in test mode (full-screen, no navigation). */
+    isTestMode?: boolean
   }
 }
 
@@ -51,18 +53,20 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Dashboard' },
       },
       {
-        path: 'test',
-        name: 'StudentTest',
-        component: () => import('@/pages/student/TestPage.vue'),
-        meta: { title: 'Test' },
-      },
-      {
         path: 'results',
         name: 'StudentResults',
         component: () => import('@/pages/student/ResultsPage.vue'),
         meta: { title: 'Natijalar' },
       },
     ],
+  },
+
+  // --- Student Test (full-screen, no layout) --------------------------------
+  {
+    path: '/student/test',
+    name: 'StudentTest',
+    component: () => import('@/pages/student/TestPage.vue'),
+    meta: { requiresAuth: true, title: 'Test', isTestMode: true },
   },
 
   // --- Teacher routes (wrapped in TeacherLayout) ----------------------------

@@ -7,11 +7,14 @@ import {
   CheckCircle2,
   AlertCircle,
   PlayCircle,
-  BarChart3,
   Trophy,
   BookOpen,
   Timer,
   ChevronRight,
+  Calendar,
+  Target,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { fetchMyAssignments, fetchMyAttempts } from '@/api/student.api'
@@ -26,43 +29,60 @@ const router = useRouter()
 const authStore = useAuthStore()
 const isLoading = ref(true)
 const showRulesModal = ref(false)
+const selectedAssignment = ref<TestAssignmentWithDetails | null>(null)
 const userGroup = ref<UserGroup | null>(null)
-const assignment = ref<TestAssignmentWithDetails | null>(null)
+const assignments = ref<TestAssignmentWithDetails[]>([])
 const completedAttempts = ref<TestAttemptWithDetails[]>([])
+const attemptsByTest = ref<Record<number, TestAttemptWithDetails[]>>({})
 
-const testInfo = computed(() => assignment.value?.test ?? null)
-
-const testAvailability = computed(() => {
-  if (!assignment.value) {
-    return { available: false, reason: 'Test tayinlanmagan', status: 'none' }
-  }
-
+// Helper to check test availability
+function getTestAvailability(assignment: TestAssignmentWithDetails) {
   const now = new Date()
-  const startTime = new Date(assignment.value.start_time)
-  const endTime = new Date(assignment.value.end_time)
+  const startTime = new Date(assignment.start_time)
+  const endTime = new Date(assignment.end_time)
 
   if (now < startTime) {
     return {
       available: false,
-      reason: `Test ${startTime.toLocaleDateString('uz-UZ')} ${startTime.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })} da boshlanadi`,
-      status: 'upcoming',
+      reason: `${startTime.toLocaleDateString('uz-UZ')} ${startTime.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })} da boshlanadi`,
+      status: 'upcoming' as const,
       startTime,
     }
   }
 
   if (now > endTime) {
-    return { available: false, reason: 'Test vaqti tugadi', status: 'expired' }
+    return { available: false, reason: 'Test vaqti tugadi', status: 'expired' as const }
   }
 
-  return { available: true, reason: 'Test topshirishga tayyor', status: 'active' }
-})
+  return { available: true, reason: 'Test topshirishga tayyor', status: 'active' as const }
+}
+
+// Helper to get remaining attempts
+function getRemainingAttempts(testId: number, maxAttempts: number) {
+  const testAttempts = attemptsByTest.value[testId] || []
+  const usedAttempts = testAttempts.filter(a =>
+    ['completed', 'timed_out', 'violation', 'cancelled'].includes(a.status)
+  ).length
+  return maxAttempts - usedAttempts
+}
+
+// Get best score for a test
+function getBestScore(testId: number) {
+  const testAttempts = attemptsByTest.value[testId] || []
+  const completed = testAttempts.filter(a =>
+    ['completed', 'timed_out', 'violation'].includes(a.status)
+  )
+  if (!completed.length) return null
+  return Math.max(...completed.map(a => Number(a.percentage) || 0))
+}
 
 const stats = computed(() => {
   if (!completedAttempts.value.length) return null
   const total = completedAttempts.value.length
   const avgPercentage = completedAttempts.value.reduce((sum, a) => sum + (Number(a.percentage) || 0), 0) / total
   const best = Math.max(...completedAttempts.value.map(a => Number(a.percentage) || 0))
-  return { total, avgPercentage: Math.round(avgPercentage), best: Math.round(best) }
+  const totalCorrect = completedAttempts.value.reduce((sum, a) => sum + (a.correct_answers || 0), 0)
+  return { total, avgPercentage: Math.round(avgPercentage), best: Math.round(best), totalCorrect }
 })
 
 async function loadDashboard() {
@@ -74,11 +94,11 @@ async function loadDashboard() {
     // Load assignments
     const assignmentResult = await fetchMyAssignments(user.id, user.user_group_id)
     if (assignmentResult.success && assignmentResult.data?.length) {
-      assignment.value = assignmentResult.data[0]
+      assignments.value = assignmentResult.data
 
-      // Derive user group from assignment if available
-      if (assignment.value.user_group) {
-        userGroup.value = assignment.value.user_group
+      // Derive user group from first assignment if available
+      if (assignments.value[0]?.user_group) {
+        userGroup.value = assignments.value[0].user_group
       }
     }
 
@@ -88,6 +108,16 @@ async function loadDashboard() {
       completedAttempts.value = attemptsResult.data.filter(
         a => ['completed', 'timed_out', 'violation'].includes(a.status)
       )
+
+      // Group attempts by test_id
+      const grouped: Record<number, TestAttemptWithDetails[]> = {}
+      for (const attempt of attemptsResult.data) {
+        if (!grouped[attempt.test_id]) {
+          grouped[attempt.test_id] = []
+        }
+        grouped[attempt.test_id].push(attempt)
+      }
+      attemptsByTest.value = grouped
     }
 
     // Load user group directly if not already set from assignment
@@ -106,7 +136,8 @@ async function loadDashboard() {
   }
 }
 
-function startTest() {
+function startTest(assignment: TestAssignmentWithDetails) {
+  selectedAssignment.value = assignment
   showRulesModal.value = true
 }
 
@@ -119,12 +150,12 @@ onMounted(loadDashboard)
 </script>
 
 <template>
-  <div class="space-y-6 pb-20 md:pb-0">
+  <div class="space-y-6 pb-20 md:pb-6">
     <!-- Loading State -->
     <div v-if="isLoading" class="space-y-6">
       <div class="h-32 bg-muted animate-pulse rounded-xl" />
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div v-for="i in 3" :key="i" class="h-24 bg-muted animate-pulse rounded-xl" />
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div v-for="i in 4" :key="i" class="h-48 bg-muted animate-pulse rounded-xl" />
       </div>
     </div>
 
@@ -151,91 +182,166 @@ onMounted(loadDashboard)
         <div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -translate-y-8 translate-x-8" />
       </div>
 
-      <!-- Test Status Card -->
-      <div class="rounded-xl border border-border bg-card p-6">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex-1">
-            <h3 class="text-lg font-semibold text-foreground mb-1">
-              {{ testInfo ? testInfo.name : 'Test' }}
-            </h3>
-            <div class="flex items-center gap-2 mb-4">
-              <span
-                :class="[
-                  'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
-                  testAvailability.status === 'active' && 'bg-green-500/10 text-green-600 dark:text-green-400',
-                  testAvailability.status === 'upcoming' && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
-                  testAvailability.status === 'expired' && 'bg-red-500/10 text-red-600 dark:text-red-400',
-                  testAvailability.status === 'none' && 'bg-muted text-muted-foreground',
-                ]"
-              >
-                <CheckCircle2 v-if="testAvailability.status === 'active'" class="w-3.5 h-3.5" />
-                <Clock v-else-if="testAvailability.status === 'upcoming'" class="w-3.5 h-3.5" />
-                <AlertCircle v-else class="w-3.5 h-3.5" />
-                {{ testAvailability.reason }}
-              </span>
+      <!-- Quick Stats -->
+      <div v-if="stats" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 shrink-0">
+              <ClipboardList class="w-5 h-5 text-primary" />
             </div>
-
-            <!-- Test details -->
-            <div v-if="testInfo" class="flex flex-wrap gap-4 text-sm text-muted-foreground">
-              <span class="flex items-center gap-1">
-                <Timer class="w-4 h-4" />
-                {{ testInfo.duration_minutes }} daqiqa
-              </span>
-              <span class="flex items-center gap-1">
-                <ClipboardList class="w-4 h-4" />
-                {{ testInfo.max_questions }} ta savol
-              </span>
+            <div>
+              <p class="text-2xl font-bold text-foreground">{{ stats.total }}</p>
+              <p class="text-xs text-muted-foreground">Jami testlar</p>
             </div>
           </div>
-
-          <!-- Action buttons -->
-          <div class="flex flex-col gap-2 shrink-0">
-            <button
-              v-if="testAvailability.available"
-              @click="startTest"
-              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors shadow-sm"
-            >
-              <PlayCircle class="w-4 h-4" />
-              Boshlash
-            </button>
-            <button
-              @click="router.push('/student/results')"
-              class="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm font-medium transition-colors"
-            >
-              <BarChart3 class="w-4 h-4" />
-              Natijalar
-            </button>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-warning/10 shrink-0">
+              <Target class="w-5 h-5 text-warning" />
+            </div>
+            <div>
+              <p class="text-2xl font-bold text-foreground">{{ stats.avgPercentage }}%</p>
+              <p class="text-xs text-muted-foreground">O'rtacha</p>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-success/10 shrink-0">
+              <Trophy class="w-5 h-5 text-success" />
+            </div>
+            <div>
+              <p class="text-2xl font-bold text-foreground">{{ stats.best }}%</p>
+              <p class="text-xs text-muted-foreground">Eng yaxshi</p>
+            </div>
+          </div>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-3">
+            <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-green-500/10 shrink-0">
+              <CheckCircle2 class="w-5 h-5 text-green-600 dark:text-green-400" />
+            </div>
+            <div>
+              <p class="text-2xl font-bold text-foreground">{{ stats.totalCorrect }}</p>
+              <p class="text-xs text-muted-foreground">To'g'ri javoblar</p>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Quick Stats -->
-      <div v-if="stats" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div class="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
-            <ClipboardList class="w-5 h-5 text-primary" />
+      <!-- Assigned Tests Section -->
+      <div>
+        <h3 class="text-lg font-semibold text-foreground mb-4">Sizga biriktirilgan testlar</h3>
+
+        <!-- Empty State -->
+        <div v-if="!assignments.length" class="rounded-xl border border-border bg-card p-8 text-center">
+          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-4">
+            <ClipboardList class="w-8 h-8 text-muted-foreground" />
           </div>
-          <div>
-            <p class="text-2xl font-bold text-foreground">{{ stats.total }}</p>
-            <p class="text-xs text-muted-foreground">Jami testlar</p>
-          </div>
+          <h4 class="text-base font-semibold text-foreground mb-1">Testlar mavjud emas</h4>
+          <p class="text-sm text-muted-foreground">Sizga hali test biriktirilmagan</p>
         </div>
-        <div class="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-warning/10">
-            <BarChart3 class="w-5 h-5 text-warning" />
-          </div>
-          <div>
-            <p class="text-2xl font-bold text-foreground">{{ stats.avgPercentage }}%</p>
-            <p class="text-xs text-muted-foreground">O'rtacha natija</p>
-          </div>
-        </div>
-        <div class="rounded-xl border border-border bg-card p-4 flex items-center gap-4">
-          <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-success/10">
-            <Trophy class="w-5 h-5 text-success" />
-          </div>
-          <div>
-            <p class="text-2xl font-bold text-foreground">{{ stats.best }}%</p>
-            <p class="text-xs text-muted-foreground">Eng yaxshi natija</p>
+
+        <!-- Test Cards Grid -->
+        <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div
+            v-for="assignment in assignments"
+            :key="assignment.id"
+            class="rounded-xl border border-border bg-card overflow-hidden hover:shadow-lg transition-shadow"
+          >
+            <div class="p-5">
+              <!-- Test Header -->
+              <div class="flex items-start justify-between gap-3 mb-4">
+                <div class="flex-1 min-w-0">
+                  <h4 class="text-base font-semibold text-foreground mb-2 line-clamp-2">
+                    {{ assignment.test?.name || 'Test' }}
+                  </h4>
+                  <!-- Status Badge -->
+                  <span
+                    :class="[
+                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium',
+                      getTestAvailability(assignment).status === 'active' && 'bg-green-500/10 text-green-600 dark:text-green-400',
+                      getTestAvailability(assignment).status === 'upcoming' && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+                      getTestAvailability(assignment).status === 'expired' && 'bg-red-500/10 text-red-600 dark:text-red-400',
+                    ]"
+                  >
+                    <CheckCircle2 v-if="getTestAvailability(assignment).status === 'active'" class="w-3.5 h-3.5" />
+                    <Clock v-else-if="getTestAvailability(assignment).status === 'upcoming'" class="w-3.5 h-3.5" />
+                    <AlertCircle v-else class="w-3.5 h-3.5" />
+                    {{ getTestAvailability(assignment).reason }}
+                  </span>
+                </div>
+
+                <!-- Best Score Badge (if completed) -->
+                <div
+                  v-if="getBestScore(assignment.test_id) !== null"
+                  :class="[
+                    'flex items-center justify-center w-12 h-12 rounded-full text-sm font-bold shrink-0',
+                    getBestScore(assignment.test_id)! >= 80 && 'bg-green-500/10 text-green-600',
+                    getBestScore(assignment.test_id)! >= 60 && getBestScore(assignment.test_id)! < 80 && 'bg-yellow-500/10 text-yellow-600',
+                    getBestScore(assignment.test_id)! < 60 && 'bg-red-500/10 text-red-600',
+                  ]"
+                >
+                  {{ Math.round(getBestScore(assignment.test_id)!) }}%
+                </div>
+              </div>
+
+              <!-- Test Info Grid -->
+              <div class="grid grid-cols-2 gap-3 mb-4 text-sm">
+                <div class="flex items-center gap-2 text-muted-foreground">
+                  <Timer class="w-4 h-4 shrink-0" />
+                  <span>{{ assignment.test?.duration_minutes }} daqiqa</span>
+                </div>
+                <div class="flex items-center gap-2 text-muted-foreground">
+                  <ClipboardList class="w-4 h-4 shrink-0" />
+                  <span>{{ assignment.test?.max_questions }} savol</span>
+                </div>
+                <div class="flex items-center gap-2 text-muted-foreground">
+                  <RefreshCw class="w-4 h-4 shrink-0" />
+                  <span>{{ getRemainingAttempts(assignment.test_id, assignment.test?.max_attempts || 1) }}/{{ assignment.test?.max_attempts }} urinish</span>
+                </div>
+                <div class="flex items-center gap-2 text-muted-foreground">
+                  <Calendar class="w-4 h-4 shrink-0" />
+                  <span class="truncate">{{ new Date(assignment.end_time).toLocaleDateString('uz-UZ', { day: '2-digit', month: '2-digit' }) }}</span>
+                </div>
+              </div>
+
+              <!-- Attempts Warning -->
+              <div
+                v-if="getRemainingAttempts(assignment.test_id, assignment.test?.max_attempts || 1) === 0"
+                class="flex items-start gap-2 p-3 rounded-lg bg-red-500/5 border border-red-500/20 mb-4"
+              >
+                <AlertTriangle class="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <p class="text-xs text-red-600 dark:text-red-400">
+                  Sizda urinishlar qolmadi
+                </p>
+              </div>
+
+              <!-- Action Button -->
+              <button
+                v-if="getTestAvailability(assignment).available && getRemainingAttempts(assignment.test_id, assignment.test?.max_attempts || 1) > 0"
+                @click="startTest(assignment)"
+                class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors shadow-sm"
+              >
+                <PlayCircle class="w-4 h-4" />
+                Testni boshlash
+              </button>
+              <button
+                v-else-if="!getTestAvailability(assignment).available"
+                disabled
+                class="w-full px-4 py-2.5 rounded-lg bg-muted text-muted-foreground text-sm font-medium cursor-not-allowed"
+              >
+                {{ getTestAvailability(assignment).status === 'upcoming' ? 'Kutilmoqda' : 'Tugagan' }}
+              </button>
+              <button
+                v-else
+                disabled
+                class="w-full px-4 py-2.5 rounded-lg bg-muted text-muted-foreground text-sm font-medium cursor-not-allowed"
+              >
+                Urinishlar tugagan
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -253,14 +359,14 @@ onMounted(loadDashboard)
         </div>
         <div class="divide-y divide-border">
           <div
-            v-for="attempt in completedAttempts.slice(0, 3)"
+            v-for="attempt in completedAttempts.slice(0, 5)"
             :key="attempt.id"
             class="flex items-center justify-between px-6 py-3 hover:bg-muted/50 transition-colors"
           >
             <div class="flex items-center gap-3 min-w-0">
               <div
                 :class="[
-                  'flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold',
+                  'flex items-center justify-center w-10 h-10 rounded-full text-xs font-bold shrink-0',
                   Number(attempt.percentage) >= 80 && 'bg-green-500/10 text-green-600',
                   Number(attempt.percentage) >= 60 && Number(attempt.percentage) < 80 && 'bg-yellow-500/10 text-yellow-600',
                   Number(attempt.percentage) < 60 && 'bg-red-500/10 text-red-600',
@@ -268,7 +374,7 @@ onMounted(loadDashboard)
               >
                 {{ Math.round(Number(attempt.percentage)) }}%
               </div>
-              <div class="min-w-0">
+              <div class="min-w-0 flex-1">
                 <p class="text-sm font-medium text-foreground truncate">
                   {{ attempt.test?.name || 'Test' }}
                 </p>
@@ -277,7 +383,7 @@ onMounted(loadDashboard)
                 </p>
               </div>
             </div>
-            <span class="text-sm text-muted-foreground">
+            <span class="text-sm text-muted-foreground shrink-0 ml-2">
               {{ attempt.correct_answers }}/{{ attempt.total_questions }}
             </span>
           </div>
