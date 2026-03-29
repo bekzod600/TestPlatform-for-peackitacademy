@@ -4,11 +4,7 @@ import router from './router'
 import './style.css'
 import App from './App.vue'
 
-import 'flowbite';
-
 const app = createApp(App)
-
-document.documentElement.classList.remove('dark');
 
 app.use(createPinia())
 app.use(router)

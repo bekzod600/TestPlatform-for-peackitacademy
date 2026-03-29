@@ -1,17 +1,23 @@
-<script setup>
+<script setup lang="ts">
 import { onMounted } from 'vue'
-import { useUsersStore } from './stores/users'
+import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 
-const usersStore = useUsersStore()
+const authStore = useAuthStore()
+const themeStore = useThemeStore()
 
 onMounted(async () => {
-  // Avval localStorage dan tez yuklaymiz (UI bloklanmasin)
-  usersStore.loadUserFromStorage()
-  // Keyin Supabase dan yangi ma'lumot olamiz (admin test biriktirgan bo'lishi mumkin)
-  await usersStore.refreshCurrentUser()
+  // Initialize theme from localStorage / system preference
+  themeStore.initTheme()
+
+  // Hydrate auth state from localStorage (synchronous, non-blocking)
+  authStore.loadFromStorage()
+
+  // Refresh user data from Supabase in the background
+  await authStore.refreshUser()
 })
 </script>
 
 <template>
-  <router-view />
+  <RouterView />
 </template>
