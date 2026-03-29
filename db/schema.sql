@@ -458,98 +458,54 @@ CREATE TRIGGER tr_questions_updated_at
 -- =============================================
 -- 14. ROW LEVEL SECURITY (RLS)
 -- =============================================
+-- VAQTINCHALIK: Ochiq RLS policy.
+-- Hozirgi arxitekturada frontend anon key orqali Supabase ga murojaat qiladi.
+-- Session-based RLS faqat Edge Functions bilan ishlaydi.
+-- Edge Functions tayyor bo'lgandan keyin to'g'ri RLS yoziladi.
+-- Hozircha authorization frontend route guards + store darajasida.
+-- =============================================
 
--- Users jadvalida RLS
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.users FOR ALL USING (true) WITH CHECK (true);
 
--- Admin barcha usersni ko'ra oladi
-CREATE POLICY "Admins can do everything with users"
-  ON public.users
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.sessions s
-      JOIN public.users u ON u.id = s.user_id
-      WHERE s.token = current_setting('request.headers', true)::json->>'authorization'
-        AND u.role IN ('super_admin', 'admin')
-        AND s.expires_at > NOW()
-    )
-  );
+ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.sessions FOR ALL USING (true) WITH CHECK (true);
 
--- Student faqat o'zini ko'radi
-CREATE POLICY "Students can view own profile"
-  ON public.users
-  FOR SELECT
-  USING (
-    id = (
-      SELECT s.user_id FROM public.sessions s
-      WHERE s.token = current_setting('request.headers', true)::json->>'authorization'
-        AND s.expires_at > NOW()
-      LIMIT 1
-    )
-  );
+ALTER TABLE public.subjects ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.subjects FOR ALL USING (true) WITH CHECK (true);
 
--- Test attempts uchun RLS
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.categories FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.user_groups ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.user_groups FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.tests ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.tests FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.questions FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.answer_options ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.answer_options FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE public.test_assignments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.test_assignments FOR ALL USING (true) WITH CHECK (true);
+
 ALTER TABLE public.test_attempts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.test_attempts FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Students see own attempts"
-  ON public.test_attempts
-  FOR SELECT
-  USING (
-    user_id = (
-      SELECT s.user_id FROM public.sessions s
-      WHERE s.token = current_setting('request.headers', true)::json->>'authorization'
-        AND s.expires_at > NOW()
-      LIMIT 1
-    )
-  );
-
-CREATE POLICY "Admins see all attempts"
-  ON public.test_attempts
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.sessions s
-      JOIN public.users u ON u.id = s.user_id
-      WHERE s.token = current_setting('request.headers', true)::json->>'authorization'
-        AND u.role IN ('super_admin', 'admin', 'teacher')
-        AND s.expires_at > NOW()
-    )
-  );
-
--- Test answers uchun RLS
 ALTER TABLE public.test_answers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.test_answers FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Students see own answers"
-  ON public.test_answers
-  FOR SELECT
-  USING (
-    attempt_id IN (
-      SELECT ta.id FROM public.test_attempts ta
-      JOIN public.sessions s ON s.user_id = ta.user_id
-      WHERE s.token = current_setting('request.headers', true)::json->>'authorization'
-        AND s.expires_at > NOW()
-    )
-  );
-
-CREATE POLICY "Admins see all answers"
-  ON public.test_answers
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.sessions s
-      JOIN public.users u ON u.id = s.user_id
-      WHERE s.token = current_setting('request.headers', true)::json->>'authorization'
-        AND u.role IN ('super_admin', 'admin', 'teacher')
-        AND s.expires_at > NOW()
-    )
-  );
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON public.audit_logs FOR ALL USING (true) WITH CHECK (true);
 
 -- =============================================
 -- 15. BOSHLANG'ICH MA'LUMOTLAR (Seed Data)
 -- =============================================
 
 -- Default admin foydalanuvchi (parol: admin123 — bcrypt hash)
--- Hash: $2a$12$LJ3m4ys3GZfnMQXYCzsk4.W6gRFN.IMRiR2cEOmS3FXPSlVymVOFy
+-- Hash: $2b$12$Sn0I5TLFPt3WBy6csY0Wre2AiN9aMwVemQn/AlRTYC9GOd11tAY8W
 INSERT INTO public.users (full_name, username, password_hash, role)
-VALUES ('Super Admin', 'admin', '$2a$12$LJ3m4ys3GZfnMQXYCzsk4.W6gRFN.IMRiR2cEOmS3FXPSlVymVOFy', 'super_admin');
+VALUES ('Super Admin', 'admin', '$2b$12$Sn0I5TLFPt3WBy6csY0Wre2AiN9aMwVemQn/AlRTYC9GOd11tAY8W', 'super_admin');

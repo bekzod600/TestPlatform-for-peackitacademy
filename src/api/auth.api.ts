@@ -5,6 +5,7 @@
 // Edge Functions will replace these in production later.
 // =============================================================
 
+import bcrypt from 'bcryptjs'
 import {
   supabase,
   setStoredSession,
@@ -66,9 +67,8 @@ export async function loginUser(
 
     const user = data as User
 
-    // TODO: Use bcrypt.compare(password, user.password_hash) when Edge
-    // Functions are available. For now, plain comparison.
-    if (user.password_hash !== password) {
+    const isValidPassword = await bcrypt.compare(password, user.password_hash)
+    if (!isValidPassword) {
       return {
         data: null,
         error: 'Invalid username or password',
