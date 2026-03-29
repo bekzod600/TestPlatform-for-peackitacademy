@@ -43,7 +43,7 @@ async function handleLogin() {
 </script>
 
 <template>
-  <div class="min-h-[100svh] flex items-center justify-center bg-background relative overflow-hidden">
+  <div class="min-[100svh] flex items-center justify-center bg-background relative overflow-hidden">
     <!-- Theme toggle -->
     <button
       @click="themeStore.toggleTheme()"

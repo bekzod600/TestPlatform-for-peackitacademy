@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-[100svh] bg-gray-100" @contextmenu.prevent @copy.prevent @cut.prevent @paste.prevent>
+  <div class="min-[100svh] bg-gray-100" @contextmenu.prevent @copy.prevent @cut.prevent @paste.prevent>
     <!-- Navbar -->
     <nav class="bg-blue-600 text-white shadow-md px-4 py-3">
       <div class="flex justify-between items-center max-w-7xl mx-auto">

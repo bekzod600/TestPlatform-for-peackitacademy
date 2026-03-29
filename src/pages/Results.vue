@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-[100svh] bg-gradient-to-br from-blue-50 to-indigo-100">
+  <div class="min-[100svh] bg-gradient-to-br from-blue-50 to-indigo-100">
     <!-- Navbar -->
     <nav class="bg-white shadow-md">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
