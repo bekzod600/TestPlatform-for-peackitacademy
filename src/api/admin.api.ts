@@ -63,7 +63,6 @@ import type {
   AuditLog,
   ListFilters,
   // Attempts
-  TestAttempt,
   AttemptListFilters,
   TestAttemptWithDetails,
 } from '@/types'

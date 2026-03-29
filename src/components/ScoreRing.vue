@@ -31,9 +31,6 @@ const strokeColor = computed(() => {
   return 'text-red-500 dark:text-red-400'
 })
 
-const trackColor = computed(() => {
-  return 'text-muted/30'
-})
 
 function animateTo(target: number, duration: number = 800) {
   const startTime = performance.now()

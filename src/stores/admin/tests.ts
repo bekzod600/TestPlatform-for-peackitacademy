@@ -85,7 +85,7 @@ export const useAdminTestsStore = defineStore('admin-tests', () => {
       if (result.success && result.data) {
         // Re-fetch the full list so we get relations populated
         await loadTests()
-        return { success: true, error: null, data: result.data }
+        return { success: true, error: null, data: { ...result.data, subject: null } as TestWithDetails }
       }
       error.value = result.error
       return { success: false, error: result.error, data: null }
@@ -119,7 +119,7 @@ export const useAdminTestsStore = defineStore('admin-tests', () => {
         if (selectedTest.value?.id === id) {
           selectedTest.value = { ...selectedTest.value, ...result.data } as TestWithDetails
         }
-        return { success: true, error: null, data: result.data }
+        return { success: true, error: null, data: { ...result.data, subject: null } as TestWithDetails }
       }
       error.value = result.error
       return { success: false, error: result.error, data: null }

@@ -12,7 +12,7 @@ const props = defineProps<{
 
 <template>
   <AvatarImagePrimitive
-    :src="props.src"
+    :src="props.src ?? ''"
     :alt="props.alt"
     :class="cn('aspect-square h-full w-full', props.class)"
   />

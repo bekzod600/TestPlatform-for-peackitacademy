@@ -44,7 +44,7 @@ const isDeleting = ref(false)
 const users = ref<UserWithGroup[]>([])
 const pagination = ref({
   page: 1,
-  page_size: PAGINATION.DEFAULT_PAGE_SIZE,
+  page_size: PAGINATION.DEFAULT_PAGE_SIZE as number,
   total_count: 0,
   total_pages: 0,
   has_next: false,

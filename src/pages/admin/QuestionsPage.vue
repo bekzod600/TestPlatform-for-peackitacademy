@@ -44,7 +44,6 @@ import type {
   QuestionWithDetails,
   QuestionInsert,
   QuestionUpdate,
-  AnswerOption,
   AnswerOptionInsert,
   Test,
   CategoryWithSubject,
@@ -109,7 +108,7 @@ const questions = ref<QuestionWithDetails[]>([])
 const isLoading = ref(false)
 const pagination = ref({
   page: 1,
-  page_size: PAGINATION.DEFAULT_PAGE_SIZE,
+  page_size: PAGINATION.DEFAULT_PAGE_SIZE as number,
   total_count: 0,
   total_pages: 1,
   has_next: false,
@@ -175,7 +174,7 @@ const form = reactive({
   question_text: '',
   question_type: QUESTION_TYPES.MULTIPLE_CHOICE as QuestionType,
   difficulty: DIFFICULTY_LEVELS.EASY as DifficultyLevel,
-  points: QUESTION_POINTS.DEFAULT,
+  points: QUESTION_POINTS.DEFAULT as number,
   test_id: null as number | null,
   category_id: null as number | null,
   explanation: '',

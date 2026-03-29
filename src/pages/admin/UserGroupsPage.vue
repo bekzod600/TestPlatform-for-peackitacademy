@@ -106,8 +106,7 @@ async function handleDelete() {
   }
 }
 
-const filteredGroups = ref<UserGroup[]>([])
-import { watch, computed } from 'vue'
+import { computed } from 'vue'
 
 const filtered = computed(() => {
   if (!searchQuery.value.trim()) return groups.value

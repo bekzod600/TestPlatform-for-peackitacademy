@@ -10,14 +10,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { SESSION, ATTEMPT_STATUSES, ANTI_CHEAT } from '@/lib/constants'
-import type { ActiveTestState, TestAttempt, Test, QuestionWithOptions, TestScoreResult } from '@/types'
+import type { ActiveTestState, QuestionWithOptions, TestScoreResult } from '@/types'
 import type { AttemptStatus } from '@/lib/constants'
 import {
   startTestAttempt,
   submitAnswer,
   finishTestAttempt,
 } from '@/api/student.api'
-import type { StartTestResult } from '@/api/student.api'
 
 export const useStudentTestStore = defineStore('student-test', () => {
   // ---------------------------------------------------------

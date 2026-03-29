@@ -86,7 +86,7 @@ export const guestGuard: NavigationGuardWithThis<undefined> = (
  * Runs the guest guard, then the auth guard, then the admin guard
  * in sequence.
  */
-export const globalBeforeEach: NavigationGuardWithThis<undefined> = (to, from, next) => {
+export const globalBeforeEach: NavigationGuardWithThis<undefined> = (to, _from, next) => {
   const authStore = useAuthStore()
 
   // --- Guest guard: redirect authenticated users away from login ---

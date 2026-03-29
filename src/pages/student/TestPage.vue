@@ -17,6 +17,7 @@ import { useStudentTestStore } from '@/stores/student/test'
 import { useTimer } from '@/composables/useTimer'
 import { useTestSecurity } from '@/composables/useTestSecurity'
 import { ANTI_CHEAT, ATTEMPT_STATUSES } from '@/lib/constants'
+import type { AttemptStatus } from '@/lib/constants'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -73,7 +74,7 @@ function selectAnswer(questionId: number, optionId: number) {
 }
 
 // Finish test
-async function handleFinishTest(status = ATTEMPT_STATUSES.COMPLETED, reason: string | null = null) {
+async function handleFinishTest(status: AttemptStatus = ATTEMPT_STATUSES.COMPLETED, reason: string | null = null) {
   if (testStore.isFinishing) return
   showFinishModal.value = false
   timer.stop()

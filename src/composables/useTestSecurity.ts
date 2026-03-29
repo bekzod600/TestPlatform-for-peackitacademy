@@ -49,7 +49,7 @@ export function useTestSecurity(onViolation?: (count: number) => void) {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  function recordViolation(type: ViolationType): void {
+  function recordViolation(_type: ViolationType): void {
     violationCount.value++
     onViolation?.(violationCount.value)
   }

@@ -14,7 +14,8 @@ import type {
   PaginatedResponse,
   ListFilters,
 } from '@/types'
-import type { PostgrestFilterBuilder } from '@supabase/postgrest-js'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type QueryBuilder = any
 
 // -------------------------------------------------------------
 // Token / Session helpers (localStorage)
@@ -113,11 +114,7 @@ export async function fetchPaginated<T>(
   table: string,
   filters: ListFilters = {},
   select = '*',
-  buildQuery?: (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    qb: PostgrestFilterBuilder<any, any, any>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ) => PostgrestFilterBuilder<any, any, any>,
+  buildQuery?: (qb: QueryBuilder) => QueryBuilder,
 ): Promise<PaginatedResponse<T>> {
   const page = filters.page ?? 1
   const pageSize = filters.page_size ?? PAGINATION.DEFAULT_PAGE_SIZE

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type HTMLAttributes, computed } from 'vue'
+import { type HTMLAttributes } from 'vue'
 import { type VariantProps, cva } from 'class-variance-authority'
 import { X } from 'lucide-vue-next'
 import { cn } from '@/lib/utils'
