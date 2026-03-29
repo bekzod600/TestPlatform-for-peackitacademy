@@ -16,8 +16,7 @@ import {
   Download,
   Upload,
 } from 'lucide-vue-next'
-import { exportToExcel, importFromExcel } from '@/composables/useExcel'
-import type { ExcelColumn } from '@/composables/useExcel'
+import { importFromExcel } from '@/composables/useExcel'
 import {
   fetchQuestions,
   fetchTests,
