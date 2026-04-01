@@ -10,6 +10,7 @@ import {
   Clock,
   AlertTriangle,
 } from 'lucide-vue-next'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import {
   fetchAssignmentsByTeacher,
   createAssignmentAsTeacher,
@@ -525,26 +526,22 @@ onMounted(loadData)
                   <!-- Start / End datetime -->
                   <div class="grid grid-cols-1 gap-4">
                     <div class="space-y-2">
-                      <label for="assign_start" class="text-sm font-medium text-foreground">Boshlanish vaqti</label>
-                      <input
-                        id="assign_start"
+                      <label class="text-sm font-medium text-foreground">Boshlanish vaqti</label>
+                      <DateTimePicker
                         v-model="form.start_time"
-                        type="datetime-local"
+                        placeholder="Boshlanish vaqtini tanlang"
                         :min="nowDateTimeLocal"
-                        class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        :class="{ 'border-destructive': formErrors.start_time }"
+                        :error="!!formErrors.start_time"
                       />
                       <p v-if="formErrors.start_time" class="text-xs text-destructive">{{ formErrors.start_time }}</p>
                     </div>
                     <div class="space-y-2">
-                      <label for="assign_end" class="text-sm font-medium text-foreground">Tugash vaqti</label>
-                      <input
-                        id="assign_end"
+                      <label class="text-sm font-medium text-foreground">Tugash vaqti</label>
+                      <DateTimePicker
                         v-model="form.end_time"
-                        type="datetime-local"
+                        placeholder="Tugash vaqtini tanlang"
                         :min="form.start_time || nowDateTimeLocal"
-                        class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        :class="{ 'border-destructive': formErrors.end_time }"
+                        :error="!!formErrors.end_time"
                       />
                       <p v-if="formErrors.end_time" class="text-xs text-destructive">{{ formErrors.end_time }}</p>
                     </div>

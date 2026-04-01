@@ -5,7 +5,8 @@
       "Bash(findstr:*)",
       "Bash(npm install:*)",
       "Bash(npx vue-tsc:*)",
-      "Bash(npx vite build)"
+      "Bash(npx vite build)",
+      "Bash(node -e:*)"
     ]
   }
 }

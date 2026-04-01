@@ -360,6 +360,19 @@ DECLARE
   v_percentage DECIMAL(5, 2) := 0;
   v_time_spent INTEGER := 0;
 BEGIN
+  -- Avval har bir javobning to'g'ri/noto'g'ri ekanini aniqlash
+  UPDATE public.test_answers ta
+  SET is_correct = (
+    ta.selected_option_id IS NOT NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public.answer_options ao
+      WHERE ao.id = ta.selected_option_id
+        AND ao.is_correct = true
+    )
+  )
+  WHERE ta.attempt_id = p_attempt_id;
+
   -- Javoblarni hisoblash
   SELECT
     COUNT(*) FILTER (WHERE ta.is_correct = true),

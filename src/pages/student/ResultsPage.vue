@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   TrendingUp,
+  Circle,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { fetchMyAttempts, fetchAttemptDetails } from '@/api/student.api'
@@ -341,35 +342,95 @@ onMounted(loadResults)
                 <div v-if="detailLoading[attempt.id]" class="p-6 text-center">
                   <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
                 </div>
-                <div v-else-if="attemptDetailsCache[attempt.id]" class="divide-y divide-border max-h-96 overflow-y-auto">
+                <div v-else-if="attemptDetailsCache[attempt.id]" class="divide-y divide-border">
                   <div
                     v-for="(answer, idx) in attemptDetailsCache[attempt.id]"
                     :key="answer.id"
-                    class="p-4"
+                    class="p-4 lg:p-5"
                   >
-                    <div class="flex items-start gap-3">
+                    <!-- Savol sarlavhasi -->
+                    <div class="flex items-start gap-3 mb-3">
                       <span
                         :class="[
-                          'flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold shrink-0 mt-0.5',
-                          answer.is_correct === true && 'bg-green-500/10 text-green-600',
-                          answer.is_correct === false && 'bg-red-500/10 text-red-600',
-                          answer.is_correct === null && 'bg-yellow-500/10 text-yellow-600',
+                          'flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0',
+                          answer.is_correct === true && 'bg-green-500/10 text-green-600 dark:text-green-400',
+                          answer.is_correct === false && 'bg-red-500/10 text-red-600 dark:text-red-400',
+                          answer.is_correct === null && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
                         ]"
                       >
                         {{ idx + 1 }}
                       </span>
                       <div class="min-w-0 flex-1">
-                        <p class="text-sm text-foreground mb-2">
+                        <p class="text-sm font-medium text-foreground leading-relaxed">
                           {{ answer.question?.question_text }}
                         </p>
-                        <div class="flex items-center gap-2 text-xs">
-                          <CheckCircle2 v-if="answer.is_correct === true" class="w-3.5 h-3.5 text-green-600" />
-                          <XCircle v-else-if="answer.is_correct === false" class="w-3.5 h-3.5 text-red-600" />
-                          <MinusCircle v-else class="w-3.5 h-3.5 text-yellow-600" />
-                          <span class="text-muted-foreground">
-                            {{ answer.is_correct === true ? 'To\'g\'ri' : answer.is_correct === false ? 'Noto\'g\'ri' : 'Javob berilmagan' }}
+                        <p
+                          v-if="answer.question?.explanation"
+                          class="mt-1.5 text-xs text-muted-foreground italic"
+                        >
+                          {{ answer.question.explanation }}
+                        </p>
+                      </div>
+                    </div>
+
+                    <!-- Variantlar -->
+                    <div class="ml-10 space-y-1.5">
+                      <template v-if="answer.question?.answer_options?.length">
+                        <div
+                          v-for="option in answer.question.answer_options"
+                          :key="option.id"
+                          :class="[
+                            'flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm border',
+                            option.is_correct
+                              ? 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-400'
+                              : answer.selected_option_id === option.id
+                                ? 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400'
+                                : 'bg-transparent border-border text-muted-foreground',
+                          ]"
+                        >
+                          <CheckCircle2
+                            v-if="option.is_correct"
+                            class="w-4 h-4 shrink-0 text-green-600 dark:text-green-400"
+                          />
+                          <XCircle
+                            v-else-if="answer.selected_option_id === option.id"
+                            class="w-4 h-4 shrink-0 text-red-600 dark:text-red-400"
+                          />
+                          <Circle
+                            v-else
+                            class="w-4 h-4 shrink-0 text-muted-foreground/40"
+                          />
+
+                          <span class="flex-1">{{ option.option_text }}</span>
+
+                          <span
+                            v-if="option.is_correct && answer.selected_option_id === option.id"
+                            class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/20 text-green-700 dark:text-green-400 shrink-0"
+                          >
+                            Sizning javobingiz
+                          </span>
+                          <span
+                            v-else-if="option.is_correct"
+                            class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-500/20 text-green-700 dark:text-green-400 shrink-0"
+                          >
+                            To'g'ri javob
+                          </span>
+                          <span
+                            v-else-if="answer.selected_option_id === option.id"
+                            class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-500/20 text-red-700 dark:text-red-400 shrink-0"
+                          >
+                            Sizning javobingiz
                           </span>
                         </div>
+                      </template>
+
+                      <!-- Javob berilmagan -->
+                      <div
+                        v-if="answer.selected_option_id === null"
+                        class="flex items-center gap-2 text-xs text-yellow-600 dark:text-yellow-400 mt-1"
+                      >
+                        <MinusCircle class="w-3.5 h-3.5" />
+                        <span>Javob berilmagan</span>
                       </div>
                     </div>
                   </div>

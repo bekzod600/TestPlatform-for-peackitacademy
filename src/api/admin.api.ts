@@ -89,7 +89,7 @@ export async function fetchUsers(
   return fetchPaginated<UserWithGroup>(
     'users',
     filters,
-    '*, user_group:user_groups(*)',
+    '*, user_group:user_groups!users_user_group_fkey(*)',
     (qb) => {
       let q = qb
       if (filters.role) {
@@ -117,7 +117,7 @@ export async function fetchUserById(
 ): Promise<ApiResponse<SafeUser>> {
   const { data, error } = await supabase
     .from('users')
-    .select('*, user_group:user_groups(*)')
+    .select('*, user_group:user_groups!users_user_group_fkey(*)')
     .eq('id', id)
     .single()
 
@@ -562,6 +562,20 @@ export async function fetchAssignments(
     filters,
     '*, test:tests(*), user_group:user_groups(*)',
   )
+}
+
+/** Fetch all assignments for a specific group. */
+export async function fetchAssignmentsByGroup(
+  groupId: number,
+): Promise<ApiResponse<TestAssignmentWithDetails[]>> {
+  const { data, error } = await supabase
+    .from('test_assignments')
+    .select('*, test:tests(*), user_group:user_groups(*)')
+    .eq('user_group_id', groupId)
+    .order('created_at', { ascending: false })
+
+  if (error) return { data: null, error: error.message, success: false }
+  return { data: (data ?? []) as TestAssignmentWithDetails[], error: null, success: true }
 }
 
 /** Create a test assignment. */

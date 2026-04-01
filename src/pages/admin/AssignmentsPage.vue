@@ -10,6 +10,7 @@ import {
   Search,
   Clock,
 } from 'lucide-vue-next'
+import { DateTimePicker } from '@/components/ui/date-time-picker'
 import {
   fetchAssignments,
   createAssignment,
@@ -289,21 +290,18 @@ onMounted(loadData)
 
               <div class="space-y-2">
                 <label class="text-sm font-medium text-foreground">Boshlanish vaqti</label>
-                <input
+                <DateTimePicker
                   v-model="form.start_time"
-                  type="datetime-local"
-                  required
-                  class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Boshlanish vaqtini tanlang"
                 />
               </div>
 
               <div class="space-y-2">
                 <label class="text-sm font-medium text-foreground">Tugash vaqti</label>
-                <input
+                <DateTimePicker
                   v-model="form.end_time"
-                  type="datetime-local"
-                  required
-                  class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Tugash vaqtini tanlang"
+                  :min="form.start_time"
                 />
               </div>
             </form>
