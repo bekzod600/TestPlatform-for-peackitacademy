@@ -157,6 +157,10 @@ export interface Question extends BaseEntity {
   explanation: string | null
   is_active: boolean
   created_by: number | null
+  /** Ushbu savolga necha marta urinib ko'rilganligi (har bir attempt uchun +1) */
+  attempts_count: number
+  /** Ushbu savol necha marta to'g'ri javob berilganligi */
+  corrects_count: number
 }
 
 /** Question with its answer options eagerly loaded */

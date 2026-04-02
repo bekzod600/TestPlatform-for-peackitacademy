@@ -21,6 +21,7 @@ import {
   fetchQuestions,
   fetchTests,
   fetchCategories,
+  fetchSubjects,
   createQuestion,
   updateQuestion,
   deleteQuestion,
@@ -45,6 +46,7 @@ import type {
   QuestionUpdate,
   AnswerOptionInsert,
   Test,
+  Subject,
   CategoryWithSubject,
   QuestionListFilters,
 } from '@/types'
@@ -59,14 +61,17 @@ const { toast } = useToast()
 // Reference data (for selects / filters)
 // ---------------------------------------------------------------------------
 const tests = ref<Test[]>([])
+const subjects = ref<Subject[]>([])
 const categories = ref<CategoryWithSubject[]>([])
 
 async function loadReferenceData() {
-  const [testsRes, catsRes] = await Promise.all([
+  const [testsRes, subjRes, catsRes] = await Promise.all([
     fetchTests({ page: 1, page_size: 500, created_by: auth.user?.id }),
+    fetchSubjects(),
     fetchCategories(),
   ])
   if (testsRes.success) tests.value = testsRes.data as unknown as Test[]
+  if (subjRes.success && subjRes.data) subjects.value = subjRes.data
   if (catsRes.success && catsRes.data) categories.value = catsRes.data
 }
 
@@ -518,6 +523,8 @@ async function exportTemplate() {
       'Ball': '1',
       'Tushuntirish': '2 + 2 = 4',
       'Holat': 'Faol',
+      'Fan': 'Matematika',
+      'Test': 'Arifmetika asoslari',
     },
     {
       'Savol matni': "O'zbekiston poytaxti qaysi shahar?",
@@ -530,6 +537,8 @@ async function exportTemplate() {
       'Ball': '1',
       'Tushuntirish': '',
       'Holat': 'Faol',
+      'Fan': 'Geografiya',
+      'Test': '',
     },
   ]
 
@@ -558,6 +567,12 @@ async function exportTemplate() {
 //   - Bitta raqam:        1        → Variant1 to'g'ri
 //   - Vergul bilan:       1,3      → Variant1 va Variant3 to'g'ri
 //   - Variant nomi bilan: Variant2 → Variant2 to'g'ri (avvalgi format ham ishlaydi)
+//
+// "Fan" ustuni (ixtiyoriy):
+//   - Fan nomi yozilsa, shu fanga tegishli testlardan qidiriladi
+// "Test" ustuni (ixtiyoriy):
+//   - Test nomi yozilsa, test_id o'rnatiladi
+//   - Agar "Fan" ham berilsa, faqat shu fanga tegishli testlardan qidiriladi
 // ---------------------------------------------------------------------------
 const fileInput = ref<HTMLInputElement | null>(null)
 const isImporting = ref(false)
@@ -651,12 +666,35 @@ async function handleFileImport(event: Event) {
       const explanation = String(row['Tushuntirish'] ?? '').trim() || null
       const isActive = String(row['Holat'] ?? 'Faol').toLowerCase() !== 'nofaol'
 
+      // Fan va Test bo'yicha test_id ni aniqlash
+      const subjectName = String(row['Fan'] ?? '').trim().toLowerCase()
+      const testName = String(row['Test'] ?? '').trim().toLowerCase()
+      let resolvedTestId: number | null = null
+
+      if (testName) {
+        let candidateTests = tests.value
+        if (subjectName) {
+          const matchedSubject = subjects.value.find(
+            (s) => s.name.toLowerCase() === subjectName,
+          )
+          if (matchedSubject) {
+            candidateTests = tests.value.filter(
+              (t) => t.subject_id === matchedSubject.id,
+            )
+          }
+        }
+        const matchedTest = candidateTests.find(
+          (t) => t.name.toLowerCase() === testName,
+        )
+        if (matchedTest) resolvedTestId = matchedTest.id
+      }
+
       const payload: QuestionInsert = {
         question_text: questionText,
         question_type: QUESTION_TYPES.MULTIPLE_CHOICE,
         difficulty,
         points,
-        test_id: null,
+        test_id: resolvedTestId,
         category_id: null,
         explanation,
         is_active: isActive,

@@ -106,6 +106,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Testlar' },
       },
       {
+        path: 'students',
+        name: 'TeacherStudents',
+        component: () => import('@/pages/teacher/StudentsPage.vue'),
+        meta: { title: "O'quvchilar" },
+      },
+      {
         path: 'results',
         name: 'TeacherResults',
         component: () => import('@/pages/teacher/ResultsPage.vue'),

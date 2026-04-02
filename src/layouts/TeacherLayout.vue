@@ -15,6 +15,7 @@ import {
   Moon,
   UsersRound,
   CalendarCheck,
+  UserRound,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -29,6 +30,7 @@ const sidebarCollapsed = ref(false)
 
 const navItems = [
   { path: '/teacher', label: 'Dashboard', icon: LayoutDashboard, exact: true },
+  { path: '/teacher/students', label: "O'quvchilar", icon: UserRound },
   { path: '/teacher/groups', label: 'Guruhlarim', icon: UsersRound },
   { path: '/teacher/assignments', label: 'Test biriktirish', icon: CalendarCheck },
   { path: '/teacher/tests', label: 'Testlar', icon: ClipboardList },

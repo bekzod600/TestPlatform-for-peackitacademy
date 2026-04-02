@@ -362,7 +362,8 @@ export async function submitAnswer(
  * 1. Update the attempt status and finished_at.
  * 2. Call the `calculate_test_score` DB function (RPC) that
  *    evaluates correctness and populates score fields.
- * 3. Return the updated attempt.
+ * 3. Update attempts_count and corrects_count for each answered question.
+ * 4. Return the updated attempt.
  */
 export async function finishTestAttempt(
   attemptId: number,
@@ -400,14 +401,16 @@ export async function finishTestAttempt(
       // Score calculation failed, but attempt is already marked finished.
       // Log but don't fail the whole operation.
       console.error('Score calculation RPC error:', rpcError.message)
-      return {
-        data: updatedAttempt as TestAttempt,
-        error: null,
-        success: true,
-      }
     }
 
-    // Re-fetch the attempt to get the updated score fields
+    // 3. Update question statistics (attempts_count & corrects_count) via RPC
+    //    This is done non-blockingly — a failure here must not break the
+    //    test finish flow for the student.
+    updateQuestionStats(attemptId).catch((err) => {
+      console.error('Failed to update question stats:', err)
+    })
+
+    // 4. Re-fetch the attempt to get the updated score fields
     const { data: finalAttempt, error: refetchError } = await supabase
       .from('test_attempts')
       .select('*')
@@ -434,6 +437,58 @@ export async function finishTestAttempt(
     const message = err instanceof Error ? err.message : 'Failed to finish test'
     return { data: null, error: message, success: false }
   }
+}
+
+/**
+ * After a test attempt finishes, increment `attempts_count` for every
+ * answered question and `corrects_count` for each correctly answered one.
+ *
+ * Uses the Supabase `increment_question_stats` RPC to guarantee atomic
+ * counter increments on the DB side (no read-modify-write race conditions).
+ *
+ * Falls back to a client-side batch if the RPC is unavailable.
+ */
+async function updateQuestionStats(attemptId: number): Promise<void> {
+  // First try the server-side RPC (preferred — one round-trip, atomic)
+  const { error: rpcError } = await supabase.rpc('increment_question_stats', {
+    p_attempt_id: attemptId,
+  })
+
+  if (!rpcError) return // RPC handled everything
+
+  // RPC not available (e.g. migration not yet applied) — fall back to
+  // client-side updates.  Each question gets its own UPDATE so that a
+  // single failure doesn't roll back the others.
+  console.warn('increment_question_stats RPC unavailable, falling back to client-side update:', rpcError.message)
+
+  // Fetch all test_answers for this attempt
+  const { data: answers, error: fetchError } = await supabase
+    .from('test_answers')
+    .select('question_id, is_correct')
+    .eq('attempt_id', attemptId)
+
+  if (fetchError || !answers || answers.length === 0) return
+
+  // Build per-question increment values
+  const statsMap = new Map<number, { attempts: number; corrects: number }>()
+  for (const answer of answers) {
+    const qid: number = answer.question_id
+    const entry = statsMap.get(qid) ?? { attempts: 0, corrects: 0 }
+    entry.attempts += 1
+    if (answer.is_correct === true) entry.corrects += 1
+    statsMap.set(qid, entry)
+  }
+
+  // Fire all updates concurrently — ignore individual failures
+  await Promise.allSettled(
+    Array.from(statsMap.entries()).map(([questionId, delta]) =>
+      supabase.rpc('increment_question_stats_single', {
+        p_question_id: questionId,
+        p_attempts_delta: delta.attempts,
+        p_corrects_delta: delta.corrects,
+      }),
+    ),
+  )
 }
 
 // =============================================================
