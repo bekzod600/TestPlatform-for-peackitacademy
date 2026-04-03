@@ -88,6 +88,8 @@ export interface User extends BaseEntity {
   user_group_id: number | null
   is_active: boolean
   last_login_at: string | null
+  /** Supabase Storage public URL for the user's avatar (nullable) */
+  avatar_url: string | null
 }
 
 /** User with its related group eagerly loaded */
@@ -161,6 +163,8 @@ export interface Question extends BaseEntity {
   attempts_count: number
   /** Ushbu savol necha marta to'g'ri javob berilganligi */
   corrects_count: number
+  /** Optional image attached to the question (Supabase Storage public URL) */
+  image_url: string | null
 }
 
 /** Question with its answer options eagerly loaded */

@@ -22,6 +22,10 @@ import {
   fetchUserGroups,
 } from '@/api/admin.api'
 import { USER_ROLES, ROLE_LABELS, PAGINATION } from '@/lib/constants'
+import ImageUploader from '@/components/ImageUploader.vue'
+import { useImageUpload, IMAGE_BUCKETS } from '@/composables/useImageUpload'
+
+const { uploadImage, deleteImage, replaceImage, isUploading: isImageUploading, uploadError: imageUploadError } = useImageUpload()
 import type {
   UserWithGroup,
   UserGroup,
@@ -72,7 +76,11 @@ const form = reactive({
   password_hash: '',
   user_group_id: null as number | null,
   is_active: true,
+  avatar_url: null as string | null,
 })
+
+const pendingAvatarFile = ref<File | null>(null)
+const avatarRemoved = ref(false)
 
 const formErrors = reactive<Record<string, string>>({})
 
@@ -186,6 +194,9 @@ function openEditSheet(user: UserWithGroup) {
   form.password_hash = ''
   form.user_group_id = user.user_group_id
   form.is_active = user.is_active
+  form.avatar_url = user.avatar_url ?? null
+  pendingAvatarFile.value = null
+  avatarRemoved.value = false
   clearFormErrors()
   isSheetOpen.value = true
 }
@@ -202,7 +213,21 @@ function resetForm() {
   form.password_hash = ''
   form.user_group_id = null
   form.is_active = true
+  form.avatar_url = null
+  pendingAvatarFile.value = null
+  avatarRemoved.value = false
   clearFormErrors()
+}
+
+function onAvatarSelected(file: File) {
+  pendingAvatarFile.value = file
+  avatarRemoved.value = false
+}
+
+function onAvatarRemoved() {
+  pendingAvatarFile.value = null
+  avatarRemoved.value = true
+  form.avatar_url = null
 }
 
 function clearFormErrors() {
@@ -253,11 +278,31 @@ async function handleSubmit() {
 
   try {
     if (isEditing.value && editingUser.value) {
+      // --- Avatar upload / removal ---
+      let avatarUrl = editingUser.value.avatar_url ?? null
+      if (pendingAvatarFile.value) {
+        const newUrl = await replaceImage(
+          pendingAvatarFile.value,
+          avatarUrl,
+          IMAGE_BUCKETS.AVATARS,
+          `user-${editingUser.value.id}`,
+        )
+        if (!newUrl) {
+          errorMessage.value = imageUploadError.value ?? 'Rasmni yuklashda xatolik'
+          return
+        }
+        avatarUrl = newUrl
+      } else if (avatarRemoved.value && avatarUrl) {
+        await deleteImage(avatarUrl, IMAGE_BUCKETS.AVATARS)
+        avatarUrl = null
+      }
+
       const payload: UserUpdate = {
         full_name: form.full_name,
         role: USER_ROLES.STUDENT,
         user_group_id: form.user_group_id,
         is_active: form.is_active,
+        avatar_url: avatarUrl,
       }
       if (form.password_hash.trim()) {
         payload.password_hash = form.password_hash
@@ -279,16 +324,29 @@ async function handleSubmit() {
         role: USER_ROLES.STUDENT,
         user_group_id: form.user_group_id,
         is_active: form.is_active,
+        avatar_url: null,
       }
 
       const result = await createUser(payload)
-      if (result.success) {
-        successMessage.value = "O'quvchi muvaffaqiyatli qo'shildi"
-        closeSheet()
-        await loadUsers()
-      } else {
+      if (!result.success || !result.data) {
         errorMessage.value = result.error ?? "O'quvchi qo'shishda xatolik yuz berdi"
+        return
       }
+
+      if (pendingAvatarFile.value) {
+        const avatarUrl = await uploadImage(
+          pendingAvatarFile.value,
+          IMAGE_BUCKETS.AVATARS,
+          `user-${result.data.id}`,
+        )
+        if (avatarUrl) {
+          await updateUser(result.data.id, { avatar_url: avatarUrl })
+        }
+      }
+
+      successMessage.value = "O'quvchi muvaffaqiyatli qo'shildi"
+      closeSheet()
+      await loadUsers()
     }
   } catch (err) {
     errorMessage.value = 'Kutilmagan xatolik yuz berdi'
@@ -320,6 +378,11 @@ async function confirmDelete() {
   successMessage.value = ''
 
   try {
+    // Storage dan avatarni o'chirish
+    if (userToDelete.value.avatar_url) {
+      await deleteImage(userToDelete.value.avatar_url, IMAGE_BUCKETS.AVATARS)
+    }
+
     const result = await deleteUser(userToDelete.value.id)
     if (result.success) {
       successMessage.value = "O'quvchi muvaffaqiyatli o'chirildi"
@@ -519,8 +582,19 @@ onMounted(async () => {
             >
               <td class="whitespace-nowrap px-6 py-4">
                 <div class="flex items-center gap-3">
-                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-sm font-medium text-green-600 dark:text-green-400">
-                    {{ user.full_name?.charAt(0)?.toUpperCase() || '?' }}
+                  <div class="relative h-8 w-8 shrink-0">
+                    <img
+                      v-if="user.avatar_url"
+                      :src="user.avatar_url"
+                      :alt="user.full_name"
+                      class="h-8 w-8 rounded-full object-cover"
+                    />
+                    <div
+                      v-else
+                      class="flex h-8 w-8 items-center justify-center rounded-full bg-green-500/10 text-sm font-medium text-green-600 dark:text-green-400"
+                    >
+                      {{ user.full_name?.charAt(0)?.toUpperCase() || '?' }}
+                    </div>
                   </div>
                   <span class="text-sm font-medium text-foreground">{{ user.full_name }}</span>
                 </div>
@@ -745,6 +819,19 @@ onMounted(async () => {
                       {{ formErrors.user_group_id }}
                     </p>
                   </div>
+
+                  <!-- Avatar Upload -->
+                  <ImageUploader
+                    :model-value="form.avatar_url"
+                    :is-uploading="isImageUploading"
+                    :error="imageUploadError"
+                    label="Profil rasmi (ixtiyoriy)"
+                    hint="JPEG, PNG, WebP — max 5 MB"
+                    shape="circle"
+                    size="md"
+                    @file-selected="onAvatarSelected"
+                    @remove="onAvatarRemoved"
+                  />
 
                   <!-- Is Active -->
                   <div class="flex items-center gap-3">

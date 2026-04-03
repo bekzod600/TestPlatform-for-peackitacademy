@@ -16,6 +16,8 @@ import {
   Download,
   Upload,
 } from 'lucide-vue-next'
+import ImageUploader from '@/components/ImageUploader.vue'
+import { useImageUpload, IMAGE_BUCKETS } from '@/composables/useImageUpload'
 import { importFromExcel } from '@/composables/useExcel'
 import {
   fetchQuestions,
@@ -56,6 +58,7 @@ import type {
 // ---------------------------------------------------------------------------
 const auth = useAuthStore()
 const { toast } = useToast()
+const { uploadImage, deleteImage, replaceImage, isUploading: isImageUploading, uploadError: imageUploadError } = useImageUpload()
 
 // ---------------------------------------------------------------------------
 // Reference data (for selects / filters)
@@ -183,7 +186,11 @@ const form = reactive({
   category_id: null as number | null,
   explanation: '',
   is_active: true,
+  image_url: null as string | null,
 })
+
+const pendingImageFile = ref<File | null>(null)
+const imageRemoved = ref(false)
 
 const optionDrafts = ref<OptionDraft[]>([])
 
@@ -196,10 +203,24 @@ function resetForm() {
   form.category_id = null
   form.explanation = ''
   form.is_active = true
+  form.image_url = null
+  pendingImageFile.value = null
+  imageRemoved.value = false
   optionDrafts.value = [
     { option_text: '', is_correct: false, sort_order: 0 },
     { option_text: '', is_correct: false, sort_order: 1 },
   ]
+}
+
+function onQuestionImageSelected(file: File) {
+  pendingImageFile.value = file
+  imageRemoved.value = false
+}
+
+function onQuestionImageRemoved() {
+  pendingImageFile.value = null
+  imageRemoved.value = true
+  form.image_url = null
 }
 
 function openAdd() {
@@ -220,6 +241,9 @@ function openEdit(q: QuestionWithDetails) {
   form.category_id = q.category_id
   form.explanation = q.explanation ?? ''
   form.is_active = q.is_active
+  form.image_url = q.image_url ?? null
+  pendingImageFile.value = null
+  imageRemoved.value = false
 
   optionDrafts.value = (q.answer_options ?? [])
     .slice()
@@ -300,6 +324,26 @@ async function saveQuestion() {
     let questionId: number
 
     if (isEditing.value && editingId.value) {
+      // --- Handle image upload / removal ---
+      let imageUrl: string | null = form.image_url
+      if (pendingImageFile.value) {
+        const oldUrl = imageUrl
+        const newUrl = await replaceImage(
+          pendingImageFile.value,
+          oldUrl,
+          IMAGE_BUCKETS.QUESTIONS,
+          `question-${editingId.value}`,
+        )
+        if (!newUrl) {
+          toast({ title: 'Xatolik', description: imageUploadError.value ?? 'Rasmni yuklashda xatolik', variant: 'destructive' })
+          return
+        }
+        imageUrl = newUrl
+      } else if (imageRemoved.value && imageUrl) {
+        await deleteImage(imageUrl, IMAGE_BUCKETS.QUESTIONS)
+        imageUrl = null
+      }
+
       // Update question
       const payload: QuestionUpdate = {
         question_text: form.question_text,
@@ -310,6 +354,7 @@ async function saveQuestion() {
         category_id: form.category_id,
         explanation: form.explanation || null,
         is_active: form.is_active,
+        image_url: imageUrl,
       }
       const res = await updateQuestion(editingId.value, payload)
       if (!res.success) {
@@ -318,7 +363,7 @@ async function saveQuestion() {
       }
       questionId = editingId.value
     } else {
-      // Create question
+      // Create question first (need the ID for the image path)
       const payload: QuestionInsert = {
         question_text: form.question_text,
         question_type: form.question_type,
@@ -329,6 +374,7 @@ async function saveQuestion() {
         explanation: form.explanation || null,
         is_active: form.is_active,
         created_by: auth.user?.id ?? null,
+        image_url: null, // set after upload
       }
       const res = await createQuestion(payload)
       if (!res.success || !res.data) {
@@ -336,6 +382,18 @@ async function saveQuestion() {
         return
       }
       questionId = res.data.id
+
+      // Upload image after question created
+      if (pendingImageFile.value) {
+        const imageUrl = await uploadImage(
+          pendingImageFile.value,
+          IMAGE_BUCKETS.QUESTIONS,
+          `question-${questionId}`,
+        )
+        if (imageUrl) {
+          await updateQuestion(questionId, { image_url: imageUrl })
+        }
+      }
     }
 
     // Save answer options
@@ -403,6 +461,11 @@ async function confirmDelete() {
   if (!deletingQuestion.value) return
   isDeleting.value = true
   try {
+    // Storage dan savol rasmini o'chirish
+    if (deletingQuestion.value.image_url) {
+      await deleteImage(deletingQuestion.value.image_url, IMAGE_BUCKETS.QUESTIONS)
+    }
+
     const res = await deleteQuestion(deletingQuestion.value.id)
     if (res.success) {
       toast({ title: "Savol o'chirildi", variant: 'success' })
@@ -916,10 +979,18 @@ onMounted(async () => {
         <div class="flex items-start justify-between gap-4">
           <!-- Main content -->
           <div class="flex-1 min-w-0 space-y-2">
-            <!-- Question text -->
-            <p class="text-sm font-medium text-foreground leading-relaxed">
-              {{ truncate(q.question_text) }}
-            </p>
+            <!-- Question text with optional image thumbnail -->
+            <div class="flex items-start gap-3">
+              <img
+                v-if="q.image_url"
+                :src="q.image_url"
+                alt="Savol rasmi"
+                class="h-14 w-14 shrink-0 rounded-lg object-cover border border-border"
+              />
+              <p class="text-sm font-medium text-foreground leading-relaxed">
+                {{ truncate(q.question_text) }}
+              </p>
+            </div>
 
             <!-- Meta row -->
             <div class="flex flex-wrap items-center gap-2">
@@ -1145,6 +1216,19 @@ onMounted(async () => {
                 <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
               </select>
             </div>
+
+            <!-- Question Image -->
+            <ImageUploader
+              :model-value="form.image_url"
+              :is-uploading="isImageUploading"
+              :error="imageUploadError"
+              label="Savol rasmi (ixtiyoriy)"
+              hint="JPEG, PNG, WebP — max 5 MB"
+              shape="square"
+              size="lg"
+              @file-selected="onQuestionImageSelected"
+              @remove="onQuestionImageRemoved"
+            />
 
             <!-- Explanation -->
             <div class="space-y-1.5">

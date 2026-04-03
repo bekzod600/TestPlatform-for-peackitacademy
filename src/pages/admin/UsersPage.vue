@@ -32,8 +32,11 @@ import type {
   UserListFilters,
   PaginatedResponse,
 } from '@/types'
+import ImageUploader from '@/components/ImageUploader.vue'
+import { useImageUpload, IMAGE_BUCKETS } from '@/composables/useImageUpload'
 
 const authStore = useAuthStore()
+const { uploadImage, deleteImage, replaceImage, isUploading: isImageUploading, uploadError: imageUploadError } = useImageUpload()
 
 // ---------------------------------------------------------------
 // State
@@ -82,7 +85,12 @@ const form = reactive({
   role: USER_ROLES.STUDENT as UserRole,
   user_group_id: null as number | null,
   is_active: true,
+  avatar_url: null as string | null,
 })
+
+// Image upload state
+const pendingAvatarFile = ref<File | null>(null)
+const avatarRemoved = ref(false)
 
 const formErrors = reactive<Record<string, string>>({})
 
@@ -217,6 +225,9 @@ function openEditSheet(user: UserWithGroup) {
   form.role = user.role
   form.user_group_id = user.user_group_id
   form.is_active = user.is_active
+  form.avatar_url = user.avatar_url ?? null
+  pendingAvatarFile.value = null
+  avatarRemoved.value = false
   clearFormErrors()
   isSheetOpen.value = true
 }
@@ -234,7 +245,21 @@ function resetForm() {
   form.role = USER_ROLES.STUDENT
   form.user_group_id = null
   form.is_active = true
+  form.avatar_url = null
+  pendingAvatarFile.value = null
+  avatarRemoved.value = false
   clearFormErrors()
+}
+
+function onAvatarSelected(file: File) {
+  pendingAvatarFile.value = file
+  avatarRemoved.value = false
+}
+
+function onAvatarRemoved() {
+  pendingAvatarFile.value = null
+  avatarRemoved.value = true
+  form.avatar_url = null
 }
 
 function clearFormErrors() {
@@ -285,12 +310,35 @@ async function handleSubmit() {
 
   try {
     if (isEditing.value && editingUser.value) {
-      // Update
+      // --- Handle avatar upload / removal ---
+      let avatarUrl = editingUser.value.avatar_url ?? null
+
+      if (pendingAvatarFile.value) {
+        // Upload new avatar, delete old one
+        const newUrl = await replaceImage(
+          pendingAvatarFile.value,
+          avatarUrl,
+          IMAGE_BUCKETS.AVATARS,
+          `user-${editingUser.value.id}`,
+        )
+        if (!newUrl) {
+          errorMessage.value = imageUploadError.value ?? 'Rasmni yuklashda xatolik'
+          return
+        }
+        avatarUrl = newUrl
+      } else if (avatarRemoved.value && avatarUrl) {
+        // Delete existing avatar from storage
+        await deleteImage(avatarUrl, IMAGE_BUCKETS.AVATARS)
+        avatarUrl = null
+      }
+
+      // Update user
       const payload: UserUpdate = {
         full_name: form.full_name,
         role: form.role,
         user_group_id: form.role === USER_ROLES.STUDENT ? form.user_group_id : null,
         is_active: form.is_active,
+        avatar_url: avatarUrl,
       }
       if (form.password_hash.trim()) {
         payload.password_hash = form.password_hash
@@ -305,7 +353,7 @@ async function handleSubmit() {
         errorMessage.value = result.error ?? "Foydalanuvchini yangilashda xatolik yuz berdi"
       }
     } else {
-      // Create
+      // --- Create user first, then upload avatar ---
       const payload: UserInsert = {
         full_name: form.full_name,
         username: form.username,
@@ -313,16 +361,31 @@ async function handleSubmit() {
         role: form.role,
         user_group_id: form.role === USER_ROLES.STUDENT ? form.user_group_id : null,
         is_active: form.is_active,
+        avatar_url: null, // will update below if file provided
       }
 
       const result = await createUser(payload)
-      if (result.success) {
-        successMessage.value = "Foydalanuvchi muvaffaqiyatli qo'shildi"
-        closeSheet()
-        await loadUsers()
-      } else {
+      if (!result.success || !result.data) {
         errorMessage.value = result.error ?? "Foydalanuvchi qo'shishda xatolik yuz berdi"
+        return
       }
+
+      // Upload avatar after user is created (we need the user id for the path)
+      if (pendingAvatarFile.value) {
+        const avatarUrl = await uploadImage(
+          pendingAvatarFile.value,
+          IMAGE_BUCKETS.AVATARS,
+          `user-${result.data.id}`,
+        )
+        if (avatarUrl) {
+          await updateUser(result.data.id, { avatar_url: avatarUrl })
+        }
+        // Non-fatal if avatar upload fails — user is already created
+      }
+
+      successMessage.value = "Foydalanuvchi muvaffaqiyatli qo'shildi"
+      closeSheet()
+      await loadUsers()
     }
   } catch (err) {
     errorMessage.value = 'Kutilmagan xatolik yuz berdi'
@@ -354,6 +417,11 @@ async function confirmDelete() {
   successMessage.value = ''
 
   try {
+    // Storage dan avatarni o'chirish (DB dan oldin, chunki id kerak)
+    if (userToDelete.value.avatar_url) {
+      await deleteImage(userToDelete.value.avatar_url, IMAGE_BUCKETS.AVATARS)
+    }
+
     const result = await deleteUser(userToDelete.value.id)
     if (result.success) {
       successMessage.value = "Foydalanuvchi muvaffaqiyatli o'chirildi"
@@ -569,8 +637,19 @@ onMounted(async () => {
             >
               <td class="whitespace-nowrap px-6 py-4">
                 <div class="flex items-center gap-3">
-                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                    {{ user.full_name?.charAt(0)?.toUpperCase() || '?' }}
+                  <div class="relative h-8 w-8 shrink-0">
+                    <img
+                      v-if="user.avatar_url"
+                      :src="user.avatar_url"
+                      :alt="user.full_name"
+                      class="h-8 w-8 rounded-full object-cover"
+                    />
+                    <div
+                      v-else
+                      class="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary"
+                    >
+                      {{ user.full_name?.charAt(0)?.toUpperCase() || '?' }}
+                    </div>
                   </div>
                   <span class="text-sm font-medium text-foreground">{{ user.full_name }}</span>
                 </div>
@@ -844,6 +923,19 @@ onMounted(async () => {
                       </p>
                     </div>
                   </Transition>
+
+                  <!-- Avatar Upload -->
+                  <ImageUploader
+                    :model-value="form.avatar_url"
+                    :is-uploading="isImageUploading"
+                    :error="imageUploadError"
+                    label="Profil rasmi (ixtiyoriy)"
+                    hint="JPEG, PNG, WebP — max 5 MB"
+                    shape="circle"
+                    size="md"
+                    @file-selected="onAvatarSelected"
+                    @remove="onAvatarRemoved"
+                  />
 
                   <!-- Is Active -->
                   <div class="flex items-center gap-3">

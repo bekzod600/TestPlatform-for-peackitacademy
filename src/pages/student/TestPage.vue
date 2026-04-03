@@ -258,6 +258,14 @@ onUnmounted(() => {
               <span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-4">
                 Savol {{ currentIndex + 1 }}
               </span>
+              <!-- Question image (optional) -->
+              <div v-if="currentQuestion.image_url" class="mb-4">
+                <img
+                  :src="currentQuestion.image_url"
+                  alt="Savol rasmi"
+                  class="max-h-64 w-auto rounded-xl border border-border object-contain mx-auto"
+                />
+              </div>
               <p class="text-lg lg:text-xl font-medium text-foreground leading-relaxed">
                 {{ currentQuestion.question_text }}
               </p>
