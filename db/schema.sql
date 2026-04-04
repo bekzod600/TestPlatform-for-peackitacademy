@@ -377,17 +377,25 @@ BEGIN
   SELECT
     COUNT(*) FILTER (WHERE ta.is_correct = true),
     COUNT(*) FILTER (WHERE ta.is_correct = false),
-    COUNT(*) FILTER (WHERE ta.selected_option_id IS NULL),
-    COUNT(*)
-  INTO v_correct, v_wrong, v_skipped, v_total
+    COUNT(*) FILTER (WHERE ta.selected_option_id IS NULL)
+  INTO v_correct, v_wrong, v_skipped
   FROM public.test_answers ta
   WHERE ta.attempt_id = p_attempt_id;
 
-  -- Ball hisoblash (har bir savol uchun points)
+  -- Barcha testdagi savollar sonini va maksimal ballni olish
   SELECT
-    COALESCE(SUM(q.points), 0),
+    att.total_questions,
+    COALESCE(SUM(q.points), 0)
+  INTO v_total, v_max_score
+  FROM public.test_attempts att
+  JOIN public.questions q ON q.test_id = att.test_id AND q.is_active = true
+  WHERE att.id = p_attempt_id
+  GROUP BY att.total_questions;
+
+  -- Olingan ballni hisoblash (faqat to'g'ri javoblar uchun)
+  SELECT
     COALESCE(SUM(CASE WHEN ta.is_correct = true THEN q.points ELSE 0 END), 0)
-  INTO v_max_score, v_earned_score
+  INTO v_earned_score
   FROM public.test_answers ta
   JOIN public.questions q ON q.id = ta.question_id
   WHERE ta.attempt_id = p_attempt_id;

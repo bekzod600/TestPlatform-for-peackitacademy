@@ -165,28 +165,7 @@ export async function startTestAttempt(
     }
     const test = testData as Test
 
-    // 2. Check max_attempts
-    const { count: attemptCount } = await supabase
-      .from('test_attempts')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('test_id', testId)
-      .in('status', [
-        ATTEMPT_STATUSES.COMPLETED,
-        ATTEMPT_STATUSES.TIMED_OUT,
-        ATTEMPT_STATUSES.VIOLATION,
-        ATTEMPT_STATUSES.CANCELLED,
-      ])
-
-    if ((attemptCount ?? 0) >= test.max_attempts) {
-      return {
-        data: null,
-        error: `Maximum attempts (${test.max_attempts}) reached for this test`,
-        success: false,
-      }
-    }
-
-    // Check for an existing in_progress attempt (resume instead of creating new)
+    // 2. Check for an existing in_progress attempt (resume instead of creating new)
     const { data: existingAttempt } = await supabase
       .from('test_attempts')
       .select('*')
@@ -198,8 +177,30 @@ export async function startTestAttempt(
     let attempt: TestAttempt
 
     if (existingAttempt) {
+      // Resume existing in-progress attempt
       attempt = existingAttempt as TestAttempt
     } else {
+      // Check max_attempts only when creating a NEW attempt
+      const { count: attemptCount } = await supabase
+        .from('test_attempts')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('test_id', testId)
+        .in('status', [
+          ATTEMPT_STATUSES.COMPLETED,
+          ATTEMPT_STATUSES.TIMED_OUT,
+          ATTEMPT_STATUSES.VIOLATION,
+          ATTEMPT_STATUSES.CANCELLED,
+        ])
+
+      if ((attemptCount ?? 0) >= test.max_attempts) {
+        return {
+          data: null,
+          error: `Maximum attempts (${test.max_attempts}) reached for this test`,
+          success: false,
+        }
+      }
+
       // 3. Create test_attempt
       const { data: newAttempt, error: attemptError } = await supabase
         .from('test_attempts')
