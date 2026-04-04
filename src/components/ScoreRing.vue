@@ -21,6 +21,7 @@ const center = computed(() => props.size / 2)
 
 const strokeDashoffset = computed(() => {
   const progress = animatedPercentage.value / 100
+  
   return circumference.value * (1 - progress)
 })
 
