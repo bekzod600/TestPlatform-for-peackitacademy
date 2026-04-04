@@ -50,6 +50,7 @@ const gapSize = computed(() => {
 <template>
   <div :class="cn('flex items-center', gapSize)">
     <GraduationCap :class="cn('text-primary shrink-0', iconSize)" />
+    
     <span
       v-if="showText"
       :class="cn('font-bold tracking-tight text-foreground', textSize)"
