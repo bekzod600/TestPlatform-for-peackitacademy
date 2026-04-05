@@ -30,6 +30,7 @@ import {
   createOption,
   updateOption,
   deleteOption,
+  syncQuestionTests,
 } from '@/api/admin.api'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/components/ui/toast/useToast'
@@ -182,7 +183,7 @@ const form = reactive({
   question_type: QUESTION_TYPES.MULTIPLE_CHOICE as QuestionType,
   difficulty: DIFFICULTY_LEVELS.EASY as DifficultyLevel,
   points: QUESTION_POINTS.DEFAULT as number,
-  test_id: null as number | null,
+  test_ids: [] as number[],
   category_id: null as number | null,
   explanation: '',
   is_active: true,
@@ -199,7 +200,7 @@ function resetForm() {
   form.question_type = QUESTION_TYPES.MULTIPLE_CHOICE
   form.difficulty = DIFFICULTY_LEVELS.EASY
   form.points = QUESTION_POINTS.DEFAULT
-  form.test_id = null
+  form.test_ids = []
   form.category_id = null
   form.explanation = ''
   form.is_active = true
@@ -237,7 +238,7 @@ function openEdit(q: QuestionWithDetails) {
   form.question_type = q.question_type
   form.difficulty = q.difficulty
   form.points = q.points
-  form.test_id = q.test_id
+  form.test_ids = (q.tests ?? []).map(t => t.id)
   form.category_id = q.category_id
   form.explanation = q.explanation ?? ''
   form.is_active = q.is_active
@@ -350,7 +351,6 @@ async function saveQuestion() {
         question_type: form.question_type,
         difficulty: form.difficulty,
         points: form.points,
-        test_id: form.test_id,
         category_id: form.category_id,
         explanation: form.explanation || null,
         is_active: form.is_active,
@@ -369,7 +369,6 @@ async function saveQuestion() {
         question_type: form.question_type,
         difficulty: form.difficulty,
         points: form.points,
-        test_id: form.test_id,
         category_id: form.category_id,
         explanation: form.explanation || null,
         is_active: form.is_active,
@@ -396,8 +395,11 @@ async function saveQuestion() {
       }
     }
 
-    // Save answer options
-    await syncAnswerOptions(questionId)
+    // Save answer options + sync test links
+    await Promise.all([
+      syncAnswerOptions(questionId),
+      syncQuestionTests(questionId, form.test_ids),
+    ])
 
     toast({ title: isEditing.value ? 'Savol yangilandi' : 'Savol yaratildi', variant: 'success' })
     closeSlideOver()
@@ -531,7 +533,7 @@ async function exportQuestions() {
       Turi: QUESTION_TYPE_LABELS[q.question_type as QuestionType] ?? q.question_type,
       Qiyinlik: DIFFICULTY_LABELS[q.difficulty as DifficultyLevel] ?? q.difficulty,
       Ball: q.points,
-      Test: q.test?.name ?? '',
+      Test: (q.tests ?? []).map(t => t.name).join(', '),
       Kategoriya: q.category?.name ?? '',
     }
 
@@ -755,28 +757,31 @@ async function handleFileImport(event: Event) {
       const explanation = String(row['Tushuntirish'] ?? '').trim() || null
       const isActive = String(row['Holat'] ?? 'Faol').toLowerCase() !== 'nofaol'
 
-      // --- 5. Fan va Test bo'yicha test_id ni aniqlash ---
+      // --- 5. Fan va Test bo'yicha testlarni aniqlash ---
       const subjectName = String(row['Fan'] ?? '').trim().toLowerCase()
-      const testName = String(row['Test'] ?? '').trim().toLowerCase()
-      let resolvedTestId: number | null = null
+      const testNamesRaw = String(row['Test'] ?? '').trim()
+      const resolvedTestIds: number[] = []
 
-      if (testName) {
-        // Agar fan nomi berilsa, faqat shu fanga tegishli testlardan qidirish
-        let candidateTests = tests.value
-        if (subjectName) {
-          const matchedSubject = subjects.value.find(
-            (s) => s.name.toLowerCase() === subjectName,
-          )
-          if (matchedSubject) {
-            candidateTests = tests.value.filter(
-              (t) => t.subject_id === matchedSubject.id,
+      if (testNamesRaw) {
+        // Vergul bilan ajratilgan bir nechta test nomi qo'llab-quvvatlanadi
+        const testNameList = testNamesRaw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
+        for (const tn of testNameList) {
+          let candidateTests = tests.value
+          if (subjectName) {
+            const matchedSubject = subjects.value.find(
+              (s) => s.name.toLowerCase() === subjectName,
             )
+            if (matchedSubject) {
+              candidateTests = tests.value.filter(
+                (t) => t.subject_id === matchedSubject.id,
+              )
+            }
           }
+          const matchedTest = candidateTests.find(
+            (t) => t.name.toLowerCase() === tn,
+          )
+          if (matchedTest) resolvedTestIds.push(matchedTest.id)
         }
-        const matchedTest = candidateTests.find(
-          (t) => t.name.toLowerCase() === testName,
-        )
-        if (matchedTest) resolvedTestId = matchedTest.id
       }
 
       // --- 6. Savol yaratish ---
@@ -785,7 +790,6 @@ async function handleFileImport(event: Event) {
         question_type: QUESTION_TYPES.MULTIPLE_CHOICE,
         difficulty,
         points,
-        test_id: resolvedTestId,
         category_id: null,
         explanation,
         is_active: isActive,
@@ -801,15 +805,20 @@ async function handleFileImport(event: Event) {
 
       imported++
 
-      // --- 7. Variantlarni saqlash ---
+      // --- 7. Variantlarni saqlash + test bog'lanishlarni yaratish ---
+      const optionPromises = []
       for (let i = 0; i < variantTexts.length; i++) {
-        await createOption({
+        optionPromises.push(createOption({
           question_id: res.data.id,
           option_text: variantTexts[i],
           is_correct: correctIndexes.has(i),
           sort_order: i,
-        })
+        }))
       }
+      if (resolvedTestIds.length > 0) {
+        optionPromises.push(syncQuestionTests(res.data.id, resolvedTestIds))
+      }
+      await Promise.all(optionPromises)
     }
 
     // --- Natija xabari ---
@@ -1009,12 +1018,13 @@ onMounted(async () => {
                 {{ QUESTION_TYPE_LABELS[q.question_type] }}
               </span>
 
-              <!-- Test name -->
+              <!-- Test names -->
               <span
-                v-if="q.test"
+                v-for="t in (q.tests ?? [])"
+                :key="t.id"
                 class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground"
               >
-                {{ q.test.name }}
+                {{ t.name }}
               </span>
 
               <!-- Points -->
@@ -1194,14 +1204,26 @@ onMounted(async () => {
               </div>
 
               <div class="space-y-1.5">
-                <label class="text-sm font-medium text-foreground">Test</label>
-                <select
-                  v-model="form.test_id"
-                  class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background transition-colors"
-                >
-                  <option :value="null">Tanlanmagan</option>
-                  <option v-for="t in tests" :key="t.id" :value="t.id">{{ t.name }}</option>
-                </select>
+                <label class="text-sm font-medium text-foreground">
+                  Testlar
+                  <span v-if="form.test_ids.length" class="font-normal text-muted-foreground">({{ form.test_ids.length }} ta tanlangan)</span>
+                </label>
+                <div class="max-h-40 overflow-y-auto rounded-lg border border-input bg-background p-2 space-y-1">
+                  <label
+                    v-for="t in tests"
+                    :key="t.id"
+                    class="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-accent cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      :value="t.id"
+                      v-model="form.test_ids"
+                      class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
+                    />
+                    <span class="text-sm text-foreground">{{ t.name }}</span>
+                  </label>
+                  <p v-if="!tests.length" class="text-xs text-muted-foreground px-2 py-1">Testlar topilmadi</p>
+                </div>
               </div>
             </div>
 

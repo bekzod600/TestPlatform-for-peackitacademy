@@ -18,7 +18,11 @@ import {
   deleteTest,
   fetchSubjects,
   fetchTeachers,
+  fetchQuestions,
+  syncTestQuestions,
+  fetchQuestionIdsForTest,
 } from '@/api/admin.api'
+import type { QuestionWithDetails } from '@/types'
 import { useAuthStore } from '@/stores/auth'
 import { PAGINATION } from '@/lib/constants'
 import type {
@@ -89,6 +93,43 @@ const form = reactive({
 })
 
 const formErrors = reactive<Record<string, string>>({})
+
+// Question picker state
+const selectedQuestionIds = ref<number[]>([])
+const availableQuestions = ref<QuestionWithDetails[]>([])
+const isLoadingQuestions = ref(false)
+const questionSearchQuery = ref('')
+
+const filteredAvailableQuestions = computed(() => {
+  const q = questionSearchQuery.value.toLowerCase().trim()
+  if (!q) return availableQuestions.value
+  return availableQuestions.value.filter(
+    (question) => question.question_text.toLowerCase().includes(q),
+  )
+})
+
+async function loadAvailableQuestions() {
+  isLoadingQuestions.value = true
+  try {
+    const result = await fetchQuestions({ page: 1, page_size: 500 })
+    if (result.success) {
+      availableQuestions.value = result.data
+    }
+  } catch (err) {
+    console.error('Failed to load questions:', err)
+  } finally {
+    isLoadingQuestions.value = false
+  }
+}
+
+function toggleQuestion(questionId: number) {
+  const idx = selectedQuestionIds.value.indexOf(questionId)
+  if (idx === -1) {
+    selectedQuestionIds.value.push(questionId)
+  } else {
+    selectedQuestionIds.value.splice(idx, 1)
+  }
+}
 
 // Delete confirmation modal
 const isDeleteModalOpen = ref(false)
@@ -195,13 +236,16 @@ function goToPage(page: number) {
 // Sheet (slide-over) handling
 // ---------------------------------------------------------------
 
-function openCreateSheet() {
+async function openCreateSheet() {
   editingTest.value = null
   resetForm()
+  selectedQuestionIds.value = []
+  questionSearchQuery.value = ''
+  if (!availableQuestions.value.length) await loadAvailableQuestions()
   isSheetOpen.value = true
 }
 
-function openEditSheet(test: TestWithDetails) {
+async function openEditSheet(test: TestWithDetails) {
   editingTest.value = test
   form.name = test.name
   form.description = test.description ?? ''
@@ -216,6 +260,11 @@ function openEditSheet(test: TestWithDetails) {
   form.is_active = test.is_active
   form.created_by = test.created_by
   clearFormErrors()
+  questionSearchQuery.value = ''
+  // Load linked question IDs
+  const linkedResult = await fetchQuestionIdsForTest(test.id)
+  selectedQuestionIds.value = linkedResult.success && linkedResult.data ? linkedResult.data : []
+  if (!availableQuestions.value.length) await loadAvailableQuestions()
   isSheetOpen.value = true
 }
 
@@ -316,6 +365,7 @@ async function handleSubmit() {
 
       const result = await updateTest(editingTest.value.id, payload, authStore.user?.id ?? null)
       if (result.success) {
+        await syncTestQuestions(editingTest.value.id, selectedQuestionIds.value)
         successMessage.value = 'Test muvaffaqiyatli yangilandi'
         closeSheet()
         await loadTests()
@@ -340,7 +390,8 @@ async function handleSubmit() {
       }
 
       const result = await createTest(payload, authStore.user?.id ?? null)
-      if (result.success) {
+      if (result.success && result.data) {
+        await syncTestQuestions(result.data.id, selectedQuestionIds.value)
         successMessage.value = "Test muvaffaqiyatli qo'shildi"
         closeSheet()
         await loadTests()
@@ -586,7 +637,7 @@ onMounted(async () => {
               </td>
               <td class="whitespace-nowrap px-6 py-4">
                 <span class="text-sm text-muted-foreground">
-                  {{ test.max_questions }}
+                  {{ test.questions_count ?? 0 }} / {{ test.max_questions }}
                 </span>
               </td>
               <td class="whitespace-nowrap px-6 py-4">
@@ -963,6 +1014,42 @@ onMounted(async () => {
                       <label for="is_active" class="text-sm text-foreground">
                         Faol
                       </label>
+                    </div>
+                  </div>
+
+                  <!-- Question Picker -->
+                  <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                      <label class="text-sm font-medium text-foreground">
+                        Savollar
+                        <span class="font-normal text-muted-foreground">({{ selectedQuestionIds.length }} ta tanlangan)</span>
+                      </label>
+                    </div>
+                    <div class="relative">
+                      <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <input
+                        v-model="questionSearchQuery"
+                        type="text"
+                        placeholder="Savollarni qidirish..."
+                        class="flex h-9 w-full rounded-lg border border-input bg-background pl-9 pr-3 py-1.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      />
+                    </div>
+                    <div class="max-h-48 overflow-y-auto rounded-lg border border-input bg-background p-1.5 space-y-0.5">
+                      <label
+                        v-for="q in filteredAvailableQuestions"
+                        :key="q.id"
+                        class="flex items-start gap-2 rounded-md px-2 py-1.5 hover:bg-accent cursor-pointer transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="selectedQuestionIds.includes(q.id)"
+                          @change="toggleQuestion(q.id)"
+                          class="mt-0.5 h-4 w-4 shrink-0 rounded border-input text-primary focus:ring-ring"
+                        />
+                        <span class="text-sm text-foreground line-clamp-2">{{ q.question_text }}</span>
+                      </label>
+                      <p v-if="isLoadingQuestions" class="text-xs text-muted-foreground text-center py-2">Yuklanmoqda...</p>
+                      <p v-else-if="filteredAvailableQuestions.length === 0" class="text-xs text-muted-foreground text-center py-2">Savollar topilmadi</p>
                     </div>
                   </div>
                 </form>

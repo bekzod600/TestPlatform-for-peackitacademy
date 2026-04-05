@@ -147,6 +147,17 @@ export type TestInsert = Omit<Test, 'id' | 'created_at' | 'updated_at'>
 export type TestUpdate = Partial<TestInsert>
 
 // -------------------------------------------------------------
+// 6b. Test-Question Junction (Many-to-Many)
+// -------------------------------------------------------------
+export interface TestQuestion extends CreatedEntity {
+  test_id: number
+  question_id: number
+  sort_order: number
+}
+
+export type TestQuestionInsert = Omit<TestQuestion, 'id' | 'created_at'>
+
+// -------------------------------------------------------------
 // 7. Questions
 // -------------------------------------------------------------
 export interface Question extends BaseEntity {
@@ -155,7 +166,6 @@ export interface Question extends BaseEntity {
   difficulty: DifficultyLevel
   points: number
   category_id: number | null
-  test_id: number | null
   explanation: string | null
   is_active: boolean
   created_by: number | null
@@ -175,7 +185,7 @@ export interface QuestionWithOptions extends Question {
 /** Question with full related data */
 export interface QuestionWithDetails extends QuestionWithOptions {
   category: Category | null
-  test: Test | null
+  tests: Test[]
 }
 
 export type QuestionInsert = Omit<Question, 'id' | 'created_at' | 'updated_at'>

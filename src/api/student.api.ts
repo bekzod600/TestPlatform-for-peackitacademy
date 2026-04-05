@@ -224,17 +224,37 @@ export async function startTestAttempt(
       attempt = newAttempt as TestAttempt
     }
 
-    // 4. Fetch questions with answer_options
-    let questionsQuery = supabase
-      .from('questions')
-      .select('*, answer_options(*)')
+    // 4. Fetch questions via junction table (test_questions)
+    const { data: links, error: linkError } = await supabase
+      .from('test_questions')
+      .select('question_id')
       .eq('test_id', testId)
-      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .limit(test.max_questions)
 
-    // Limit to max_questions
-    questionsQuery = questionsQuery.limit(test.max_questions)
+    if (linkError) {
+      return {
+        data: null,
+        error: linkError.message,
+        success: false,
+      }
+    }
 
-    const { data: rawQuestions, error: qError } = await questionsQuery
+    const questionIds = (links ?? []).map((l: { question_id: number }) => l.question_id)
+
+    let rawQuestions: unknown[] = []
+    let qError: { message: string } | null = null
+
+    if (questionIds.length > 0) {
+      const { data: qData, error: qErr } = await supabase
+        .from('questions')
+        .select('*, answer_options(*)')
+        .in('id', questionIds)
+        .eq('is_active', true)
+
+      rawQuestions = qData ?? []
+      qError = qErr
+    }
 
     if (qError) {
       return {
