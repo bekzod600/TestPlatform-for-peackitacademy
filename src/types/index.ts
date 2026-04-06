@@ -147,6 +147,17 @@ export type TestInsert = Omit<Test, 'id' | 'created_at' | 'updated_at'>
 export type TestUpdate = Partial<TestInsert>
 
 // -------------------------------------------------------------
+// 6b. Test-Question Junction (Many-to-Many)
+// -------------------------------------------------------------
+export interface TestQuestion extends CreatedEntity {
+  test_id: number
+  question_id: number
+  sort_order: number
+}
+
+export type TestQuestionInsert = Omit<TestQuestion, 'id' | 'created_at'>
+
+// -------------------------------------------------------------
 // 7. Questions
 // -------------------------------------------------------------
 export interface Question extends BaseEntity {
@@ -155,7 +166,6 @@ export interface Question extends BaseEntity {
   difficulty: DifficultyLevel
   points: number
   category_id: number | null
-  test_id: number | null
   explanation: string | null
   is_active: boolean
   created_by: number | null
@@ -175,10 +185,12 @@ export interface QuestionWithOptions extends Question {
 /** Question with full related data */
 export interface QuestionWithDetails extends QuestionWithOptions {
   category: Category | null
-  test: Test | null
+  tests: Test[]
 }
 
-export type QuestionInsert = Omit<Question, 'id' | 'created_at' | 'updated_at'>
+export type QuestionInsert = Omit<Question, 'id' | 'created_at' | 'updated_at' | 'attempts_count' | 'corrects_count' | 'image_url'> & {
+  image_url?: string | null
+}
 export type QuestionUpdate = Partial<QuestionInsert>
 
 // -------------------------------------------------------------
@@ -203,6 +215,14 @@ export interface TestAssignment extends CreatedEntity {
   start_time: string
   end_time: string
   assigned_by: number | null
+  /** Override sozlamalar (null = testning default qiymati ishlatiladi) */
+  duration_minutes: number | null
+  max_questions: number | null
+  passing_score: number | null
+  max_attempts: number | null
+  shuffle_questions: boolean | null
+  shuffle_answers: boolean | null
+  show_results: boolean | null
 }
 
 /** Assignment with related test and group */
@@ -356,6 +376,17 @@ export interface AuthState {
 // =============================================================
 // Store / State Types
 // =============================================================
+
+/** Effective test settings after COALESCE(assignment override, test default) */
+export interface EffectiveTestSettings {
+  duration_minutes: number
+  max_questions: number
+  passing_score: number
+  max_attempts: number
+  shuffle_questions: boolean
+  shuffle_answers: boolean
+  show_results: boolean
+}
 
 /** Active test session state (persisted to localStorage) */
 export interface ActiveTestState {

@@ -113,7 +113,7 @@ export const useStudentTestStore = defineStore('student-test', () => {
         return { success: false, error: error.value }
       }
 
-      const { attempt, test, questions } = result.data
+      const { attempt, test, questions, effectiveSettings } = result.data
 
       // Initialise the answers map with null for every question
       const answers: Record<number, number | null> = {}
@@ -129,9 +129,9 @@ export const useStudentTestStore = defineStore('student-test', () => {
         answers,
         current_index: 0,
         is_active: true,
-        duration_seconds: test.duration_minutes * 60,
+        duration_seconds: effectiveSettings.duration_minutes * 60,
         started_at: attempt.started_at,
-        time_remaining_seconds: test.duration_minutes * 60,
+        time_remaining_seconds: effectiveSettings.duration_minutes * 60,
         violation_count: attempt.violation_count,
       }
 

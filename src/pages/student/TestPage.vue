@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import {
   Clock,
   ChevronLeft,
@@ -21,6 +21,7 @@ import { ANTI_CHEAT, ATTEMPT_STATUSES } from '@/lib/constants'
 import type { AttemptStatus } from '@/lib/constants'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const testStore = useStudentTestStore()
 
@@ -127,6 +128,13 @@ async function initTest() {
     return
   }
 
+  // Get assignmentId from route query
+  const assignmentId = Number(route.query.assignmentId)
+  if (!assignmentId) {
+    router.push('/student/dashboard')
+    return
+  }
+
   // We need the assignment info - fetch it
   try {
     const { fetchMyAssignments } = await import('@/api/student.api')
@@ -137,8 +145,8 @@ async function initTest() {
       return
     }
 
-    const assignment = result.data[0]
-    if (!assignment.test) {
+    const assignment = result.data.find(a => a.id === assignmentId)
+    if (!assignment || !assignment.test) {
       router.push('/student/dashboard')
       return
     }

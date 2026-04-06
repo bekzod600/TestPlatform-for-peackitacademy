@@ -62,7 +62,23 @@ const form = reactive({
   user_group_id: null as number | null,
   start_time: '',
   end_time: '',
+  // Override settings (null = test default ishlatiladi)
+  duration_minutes: null as number | null,
+  max_questions: null as number | null,
+  passing_score: null as number | null,
+  max_attempts: null as number | null,
+  shuffle_questions: null as boolean | null,
+  shuffle_answers: null as boolean | null,
+  show_results: null as boolean | null,
 })
+
+/** Tanlangan testning default sozlamalari (placeholder uchun) */
+const selectedTestDefaults = ref<Test | null>(null)
+
+function onTestChange() {
+  const t = myTests.value.find(t => t.id === form.test_id)
+  selectedTestDefaults.value = t ?? null
+}
 const formErrors = reactive<Record<string, string>>({})
 
 // Delete modal
@@ -121,6 +137,14 @@ function resetForm() {
   form.user_group_id = null
   form.start_time = ''
   form.end_time = ''
+  form.duration_minutes = null
+  form.max_questions = null
+  form.passing_score = null
+  form.max_attempts = null
+  form.shuffle_questions = null
+  form.shuffle_answers = null
+  form.show_results = null
+  selectedTestDefaults.value = null
   clearFormErrors()
 }
 
@@ -175,6 +199,13 @@ async function handleSubmit() {
       start_time: form.start_time,
       end_time: form.end_time,
       assigned_by: teacherId.value,
+      duration_minutes: form.duration_minutes || null,
+      max_questions: form.max_questions || null,
+      passing_score: form.passing_score ?? null,
+      max_attempts: form.max_attempts || null,
+      shuffle_questions: form.shuffle_questions,
+      shuffle_answers: form.shuffle_answers,
+      show_results: form.show_results,
     }
 
     const result = await createAssignmentAsTeacher(payload, teacherId.value)
@@ -388,7 +419,18 @@ onMounted(loadData)
                   <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-purple-500/10 shrink-0">
                     <CalendarCheck class="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   </div>
-                  <span class="text-sm font-medium text-foreground">{{ assignment.test?.name ?? '—' }}</span>
+                  <div class="min-w-0">
+                    <span class="text-sm font-medium text-foreground">{{ assignment.test?.name ?? '—' }}</span>
+                    <div
+                      v-if="assignment.duration_minutes || assignment.max_questions || assignment.passing_score || assignment.max_attempts"
+                      class="flex flex-wrap gap-1 mt-1"
+                    >
+                      <span v-if="assignment.duration_minutes" class="inline-flex items-center rounded-md bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">{{ assignment.duration_minutes }} daq</span>
+                      <span v-if="assignment.max_questions" class="inline-flex items-center rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">{{ assignment.max_questions }} savol</span>
+                      <span v-if="assignment.passing_score" class="inline-flex items-center rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">{{ assignment.passing_score }}%</span>
+                      <span v-if="assignment.max_attempts" class="inline-flex items-center rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">{{ assignment.max_attempts }} urinish</span>
+                    </div>
+                  </div>
                 </div>
               </td>
               <td class="whitespace-nowrap px-6 py-4">
@@ -489,6 +531,7 @@ onMounted(loadData)
                     <select
                       id="assign_test"
                       v-model="form.test_id"
+                      @change="onTestChange"
                       class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       :class="{ 'border-destructive': formErrors.test_id }"
                     >
@@ -544,6 +587,97 @@ onMounted(loadData)
                         :error="!!formErrors.end_time"
                       />
                       <p v-if="formErrors.end_time" class="text-xs text-destructive">{{ formErrors.end_time }}</p>
+                    </div>
+                  </div>
+
+                  <!-- Override sozlamalar -->
+                  <div v-if="form.test_id" class="space-y-4 rounded-lg border border-border bg-muted/30 p-4">
+                    <div>
+                      <p class="text-sm font-medium text-foreground">Test sozlamalari</p>
+                      <p class="text-xs text-muted-foreground mt-0.5">Bo'sh qoldirilsa test default qiymati ishlatiladi</p>
+                    </div>
+
+                    <!-- Duration & Max Questions -->
+                    <div class="grid grid-cols-2 gap-3">
+                      <div class="space-y-1.5">
+                        <label class="text-xs font-medium text-foreground">Davomiylik (daq)</label>
+                        <input
+                          v-model.number="form.duration_minutes"
+                          type="number"
+                          min="1"
+                          max="300"
+                          :placeholder="selectedTestDefaults ? `Default: ${selectedTestDefaults.duration_minutes}` : ''"
+                          class="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                      </div>
+                      <div class="space-y-1.5">
+                        <label class="text-xs font-medium text-foreground">Savollar soni</label>
+                        <input
+                          v-model.number="form.max_questions"
+                          type="number"
+                          min="1"
+                          max="500"
+                          :placeholder="selectedTestDefaults ? `Default: ${selectedTestDefaults.max_questions}` : ''"
+                          class="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                      </div>
+                    </div>
+
+                    <!-- Passing Score & Max Attempts -->
+                    <div class="grid grid-cols-2 gap-3">
+                      <div class="space-y-1.5">
+                        <label class="text-xs font-medium text-foreground">O'tish balli (%)</label>
+                        <input
+                          v-model.number="form.passing_score"
+                          type="number"
+                          min="0"
+                          max="100"
+                          :placeholder="selectedTestDefaults ? `Default: ${selectedTestDefaults.passing_score}` : ''"
+                          class="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                      </div>
+                      <div class="space-y-1.5">
+                        <label class="text-xs font-medium text-foreground">Urinishlar soni</label>
+                        <input
+                          v-model.number="form.max_attempts"
+                          type="number"
+                          min="1"
+                          max="100"
+                          :placeholder="selectedTestDefaults ? `Default: ${selectedTestDefaults.max_attempts}` : ''"
+                          class="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        />
+                      </div>
+                    </div>
+
+                    <!-- Checkboxes -->
+                    <div class="space-y-2.5">
+                      <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          :checked="form.shuffle_questions ?? selectedTestDefaults?.shuffle_questions ?? true"
+                          @change="form.shuffle_questions = ($event.target as HTMLInputElement).checked"
+                          class="h-4 w-4 rounded border-input accent-primary"
+                        />
+                        <span class="text-sm text-foreground">Savollarni aralashtirish</span>
+                      </label>
+                      <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          :checked="form.shuffle_answers ?? selectedTestDefaults?.shuffle_answers ?? true"
+                          @change="form.shuffle_answers = ($event.target as HTMLInputElement).checked"
+                          class="h-4 w-4 rounded border-input accent-primary"
+                        />
+                        <span class="text-sm text-foreground">Javoblarni aralashtirish</span>
+                      </label>
+                      <label class="flex items-center gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          :checked="form.show_results ?? selectedTestDefaults?.show_results ?? true"
+                          @change="form.show_results = ($event.target as HTMLInputElement).checked"
+                          class="h-4 w-4 rounded border-input accent-primary"
+                        />
+                        <span class="text-sm text-foreground">Natijalarni ko'rsatish</span>
+                      </label>
                     </div>
                   </div>
                 </form>

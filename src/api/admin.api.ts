@@ -346,7 +346,7 @@ export async function deleteCategory(id: number, actorId?: number | null): Promi
 export async function fetchTests(
   filters: TestListFilters = {},
 ): Promise<PaginatedResponse<TestWithDetails>> {
-  return fetchPaginated<TestWithDetails>(
+  const result = await fetchPaginated<TestWithDetails>(
     'tests',
     filters,
     '*, subject:subjects(*), created_by_user:users!tests_created_by_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at)',
@@ -369,6 +369,25 @@ export async function fetchTests(
       return q
     },
   )
+
+  // Enrich with question counts from junction table
+  if (result.success && result.data.length > 0) {
+    const testIds = result.data.map(t => t.id)
+    const { data: links } = await supabase
+      .from('test_questions')
+      .select('test_id')
+      .in('test_id', testIds)
+
+    const countMap = new Map<number, number>()
+    for (const row of links ?? []) {
+      countMap.set(row.test_id, (countMap.get(row.test_id) ?? 0) + 1)
+    }
+    for (const test of result.data) {
+      test.questions_count = countMap.get(test.id) ?? 0
+    }
+  }
+
+  return result
 }
 
 /** Fetch a single test with full details. */
@@ -422,18 +441,45 @@ export async function deleteTest(id: number, actorId?: number | null): Promise<A
 // QUESTIONS
 // =============================================================
 
+/**
+ * Transform Supabase response with nested test_questions into QuestionWithDetails shape.
+ */
+function transformQuestionResponse(raw: any): QuestionWithDetails {
+  const { test_questions, ...question } = raw
+  return {
+    ...question,
+    tests: (test_questions ?? [])
+      .map((tq: any) => tq.test)
+      .filter(Boolean),
+  }
+}
+
 /** Fetch paginated questions with optional filters. */
 export async function fetchQuestions(
   filters: QuestionListFilters = {},
 ): Promise<PaginatedResponse<QuestionWithDetails>> {
-  return fetchPaginated<QuestionWithDetails>(
+  // If filtering by test_id, first get question IDs from junction table
+  let questionIdsForTest: number[] | null = null
+  if (filters.test_id !== undefined) {
+    const { data: links } = await supabase
+      .from('test_questions')
+      .select('question_id')
+      .eq('test_id', filters.test_id)
+    questionIdsForTest = (links ?? []).map((l: any) => l.question_id)
+  }
+
+  const result = await fetchPaginated<any>(
     'questions',
     filters,
-    '*, answer_options(*), category:categories(*), test:tests(*)',
+    '*, answer_options(*), category:categories(*), test_questions(test_id, sort_order, test:tests(*))',
     (qb) => {
       let q = qb
-      if (filters.test_id !== undefined) {
-        q = q.eq('test_id', filters.test_id)
+      if (questionIdsForTest !== null) {
+        if (questionIdsForTest.length === 0) {
+          q = q.eq('id', -1) // Force empty result
+        } else {
+          q = q.in('id', questionIdsForTest)
+        }
       }
       if (filters.category_id !== undefined) {
         q = q.eq('category_id', filters.category_id)
@@ -456,17 +502,30 @@ export async function fetchQuestions(
       return q
     },
   )
+
+  // Transform nested test_questions into tests array
+  if (result.success) {
+    result.data = result.data.map(transformQuestionResponse)
+  }
+
+  return result as PaginatedResponse<QuestionWithDetails>
 }
 
 /** Fetch a single question with options and relations. */
 export async function fetchQuestionById(
   id: number,
 ): Promise<ApiResponse<QuestionWithDetails>> {
-  return fetchById<QuestionWithDetails>(
+  const result = await fetchById<any>(
     'questions',
     id,
-    '*, answer_options(*), category:categories(*), test:tests(*)',
+    '*, answer_options(*), category:categories(*), test_questions(test_id, sort_order, test:tests(*))',
   )
+
+  if (result.success && result.data) {
+    result.data = transformQuestionResponse(result.data)
+  }
+
+  return result as ApiResponse<QuestionWithDetails>
 }
 
 /** Create a question (without answer options — create those separately). */
@@ -507,6 +566,118 @@ export async function deleteQuestion(id: number, actorId?: number | null): Promi
     await logAudit({ user_id: actorId, action: 'delete', entity_type: 'question', entity_id: id })
   }
   return result
+}
+
+// =============================================================
+// TEST-QUESTION JUNCTION (Many-to-Many)
+// =============================================================
+
+/**
+ * Sync the questions linked to a test.
+ * Replaces all existing links with the given questionIds.
+ */
+export async function syncTestQuestions(
+  testId: number,
+  questionIds: number[],
+): Promise<ApiResponse<null>> {
+  try {
+    // Delete existing links
+    const { error: delError } = await supabase
+      .from('test_questions')
+      .delete()
+      .eq('test_id', testId)
+
+    if (delError) {
+      return { data: null, error: delError.message, success: false }
+    }
+
+    // Insert new links
+    if (questionIds.length > 0) {
+      const rows = questionIds.map((qid, idx) => ({
+        test_id: testId,
+        question_id: qid,
+        sort_order: idx,
+      }))
+
+      const { error: insError } = await supabase
+        .from('test_questions')
+        .insert(rows)
+
+      if (insError) {
+        return { data: null, error: insError.message, success: false }
+      }
+    }
+
+    return { data: null, error: null, success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to sync test questions'
+    return { data: null, error: message, success: false }
+  }
+}
+
+/**
+ * Sync the tests linked to a question.
+ * Replaces all existing links with the given testIds.
+ */
+export async function syncQuestionTests(
+  questionId: number,
+  testIds: number[],
+): Promise<ApiResponse<null>> {
+  try {
+    // Delete existing links
+    const { error: delError } = await supabase
+      .from('test_questions')
+      .delete()
+      .eq('question_id', questionId)
+
+    if (delError) {
+      return { data: null, error: delError.message, success: false }
+    }
+
+    // Insert new links
+    if (testIds.length > 0) {
+      const rows = testIds.map((tid, idx) => ({
+        test_id: tid,
+        question_id: questionId,
+        sort_order: idx,
+      }))
+
+      const { error: insError } = await supabase
+        .from('test_questions')
+        .insert(rows)
+
+      if (insError) {
+        return { data: null, error: insError.message, success: false }
+      }
+    }
+
+    return { data: null, error: null, success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to sync question tests'
+    return { data: null, error: message, success: false }
+  }
+}
+
+/**
+ * Fetch question IDs linked to a specific test (for QuestionPicker).
+ */
+export async function fetchQuestionIdsForTest(
+  testId: number,
+): Promise<ApiResponse<number[]>> {
+  const { data, error } = await supabase
+    .from('test_questions')
+    .select('question_id')
+    .eq('test_id', testId)
+    .order('sort_order', { ascending: true })
+
+  if (error) {
+    return { data: null, error: error.message, success: false }
+  }
+  return {
+    data: (data ?? []).map((r: { question_id: number }) => r.question_id),
+    error: null,
+    success: true,
+  }
 }
 
 // =============================================================
