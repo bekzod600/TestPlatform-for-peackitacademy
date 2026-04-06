@@ -167,9 +167,6 @@ export async function startTestAttempt(
     }
     const test = testData as Test
 
-<<<<<<< HEAD
-    // 2. Check for an existing in_progress attempt (resume instead of creating new)
-=======
     // 1b. Fetch assignment override settings (COALESCE pattern)
     let overrides: {
       duration_minutes: number | null
@@ -201,29 +198,7 @@ export async function startTestAttempt(
       show_results: overrides?.show_results ?? test.show_results,
     }
 
-    // 2. Check max_attempts using effective settings
-    const { count: attemptCount } = await supabase
-      .from('test_attempts')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('test_id', testId)
-      .in('status', [
-        ATTEMPT_STATUSES.COMPLETED,
-        ATTEMPT_STATUSES.TIMED_OUT,
-        ATTEMPT_STATUSES.VIOLATION,
-        ATTEMPT_STATUSES.CANCELLED,
-      ])
-
-    if ((attemptCount ?? 0) >= effective.max_attempts) {
-      return {
-        data: null,
-        error: `Maximum attempts (${effective.max_attempts}) reached for this test`,
-        success: false,
-      }
-    }
-
-    // Check for an existing in_progress attempt (resume instead of creating new)
->>>>>>> dev
+    // 2. Check for an existing in_progress attempt (resume instead of creating new)
     const { data: existingAttempt } = await supabase
       .from('test_attempts')
       .select('*')
@@ -251,10 +226,10 @@ export async function startTestAttempt(
           ATTEMPT_STATUSES.CANCELLED,
         ])
 
-      if ((attemptCount ?? 0) >= test.max_attempts) {
+      if ((attemptCount ?? 0) >= effective.max_attempts) {
         return {
           data: null,
-          error: `Maximum attempts (${test.max_attempts}) reached for this test`,
+          error: `Maximum attempts (${effective.max_attempts}) reached for this test`,
           success: false,
         }
       }

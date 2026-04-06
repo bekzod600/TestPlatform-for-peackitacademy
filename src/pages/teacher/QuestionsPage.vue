@@ -329,8 +329,6 @@ async function saveQuestion() {
         is_active: form.is_active,
         created_by: auth.user?.id ?? null,
         image_url: null,
-        attempts_count: 0,
-        corrects_count: 0,
       }
       const res = await createQuestion(payload)
       if (!res.success || !res.data) {
@@ -707,8 +705,6 @@ async function handleFileImport(event: Event) {
         is_active: isActive,
         created_by: auth.user?.id ?? null,
         image_url: null,
-        attempts_count: 0,
-        corrects_count: 0,
       }
 
       const res = await createQuestion(payload)
