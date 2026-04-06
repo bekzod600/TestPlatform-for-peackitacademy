@@ -21,7 +21,7 @@ import {
   deleteUser,
   fetchUserGroups,
 } from '@/api/admin.api'
-import { USER_ROLES, ROLE_LABELS, PAGINATION } from '@/lib/constants'
+import { USER_ROLES, PAGINATION } from '@/lib/constants'
 import ImageUploader from '@/components/ImageUploader.vue'
 import { useImageUpload, IMAGE_BUCKETS } from '@/composables/useImageUpload'
 

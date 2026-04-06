@@ -188,7 +188,9 @@ export interface QuestionWithDetails extends QuestionWithOptions {
   tests: Test[]
 }
 
-export type QuestionInsert = Omit<Question, 'id' | 'created_at' | 'updated_at'>
+export type QuestionInsert = Omit<Question, 'id' | 'created_at' | 'updated_at' | 'attempts_count' | 'corrects_count' | 'image_url'> & {
+  image_url?: string | null
+}
 export type QuestionUpdate = Partial<QuestionInsert>
 
 // -------------------------------------------------------------
