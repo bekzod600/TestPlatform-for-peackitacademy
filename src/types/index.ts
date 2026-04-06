@@ -215,6 +215,14 @@ export interface TestAssignment extends CreatedEntity {
   start_time: string
   end_time: string
   assigned_by: number | null
+  /** Override sozlamalar (null = testning default qiymati ishlatiladi) */
+  duration_minutes: number | null
+  max_questions: number | null
+  passing_score: number | null
+  max_attempts: number | null
+  shuffle_questions: boolean | null
+  shuffle_answers: boolean | null
+  show_results: boolean | null
 }
 
 /** Assignment with related test and group */
@@ -368,6 +376,17 @@ export interface AuthState {
 // =============================================================
 // Store / State Types
 // =============================================================
+
+/** Effective test settings after COALESCE(assignment override, test default) */
+export interface EffectiveTestSettings {
+  duration_minutes: number
+  max_questions: number
+  passing_score: number
+  max_attempts: number
+  shuffle_questions: boolean
+  shuffle_answers: boolean
+  show_results: boolean
+}
 
 /** Active test session state (persisted to localStorage) */
 export interface ActiveTestState {

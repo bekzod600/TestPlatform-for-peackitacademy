@@ -83,15 +83,7 @@ const form = reactive({
   name: '',
   description: '',
   subject_id: null as number | null,
-  duration_minutes: 60,
-  max_questions: 20,
-  passing_score: 60,
-  shuffle_questions: true,
-  shuffle_answers: true,
-  show_results: true,
-  max_attempts: 1,
   is_active: true,
-  created_by: null as number | null,
 })
 
 const formErrors = reactive<Record<string, string>>({})
@@ -244,15 +236,7 @@ async function openEditSheet(test: TestWithDetails) {
   form.name = test.name
   form.description = test.description ?? ''
   form.subject_id = test.subject_id
-  form.duration_minutes = test.duration_minutes
-  form.max_questions = test.max_questions
-  form.passing_score = test.passing_score
-  form.shuffle_questions = test.shuffle_questions
-  form.shuffle_answers = test.shuffle_answers
-  form.show_results = test.show_results
-  form.max_attempts = test.max_attempts
   form.is_active = test.is_active
-  form.created_by = test.created_by
   clearFormErrors()
   questionSearchQuery.value = ''
   const linkedResult = await fetchQuestionIdsForTest(test.id)
@@ -271,15 +255,7 @@ function resetForm() {
   form.name = ''
   form.description = ''
   form.subject_id = null
-  form.duration_minutes = 60
-  form.max_questions = 20
-  form.passing_score = 60
-  form.shuffle_questions = true
-  form.shuffle_answers = true
-  form.show_results = true
-  form.max_attempts = 1
   form.is_active = true
-  form.created_by = null
   clearFormErrors()
 }
 
@@ -305,26 +281,6 @@ function validateForm(): boolean {
     valid = false
   }
 
-  if (!form.duration_minutes || form.duration_minutes < 1) {
-    formErrors.duration_minutes = 'Davomiylik kamida 1 daqiqa bo\'lishi kerak'
-    valid = false
-  }
-
-  if (!form.max_questions || form.max_questions < 1) {
-    formErrors.max_questions = 'Savollar soni kamida 1 bo\'lishi kerak'
-    valid = false
-  }
-
-  if (form.passing_score < 0 || form.passing_score > 100) {
-    formErrors.passing_score = 'O\'tish balli 0 dan 100 gacha bo\'lishi kerak'
-    valid = false
-  }
-
-  if (!form.max_attempts || form.max_attempts < 1) {
-    formErrors.max_attempts = 'Urinishlar soni kamida 1 bo\'lishi kerak'
-    valid = false
-  }
-
   return valid
 }
 
@@ -346,13 +302,6 @@ async function handleSubmit() {
         name: form.name,
         description: form.description || null,
         subject_id: form.subject_id,
-        duration_minutes: form.duration_minutes,
-        max_questions: form.max_questions,
-        passing_score: form.passing_score,
-        shuffle_questions: form.shuffle_questions,
-        shuffle_answers: form.shuffle_answers,
-        show_results: form.show_results,
-        max_attempts: form.max_attempts,
         is_active: form.is_active,
       }
 
@@ -371,13 +320,13 @@ async function handleSubmit() {
         name: form.name,
         description: form.description || null,
         subject_id: form.subject_id,
-        duration_minutes: form.duration_minutes,
-        max_questions: form.max_questions,
-        passing_score: form.passing_score,
-        shuffle_questions: form.shuffle_questions,
-        shuffle_answers: form.shuffle_answers,
-        show_results: form.show_results,
-        max_attempts: form.max_attempts,
+        duration_minutes: 60,
+        max_questions: 50,
+        passing_score: 60,
+        shuffle_questions: true,
+        shuffle_answers: true,
+        show_results: true,
+        max_attempts: 1,
         is_active: form.is_active,
         created_by: auth.user?.id ?? null,
       }
@@ -446,13 +395,6 @@ function getStatusBadgeClass(isActive: boolean): string {
   return isActive
     ? 'bg-green-500/10 text-green-600 dark:text-green-400'
     : 'bg-red-500/10 text-red-600 dark:text-red-400'
-}
-
-function formatDuration(minutes: number): string {
-  if (minutes < 60) return `${minutes} daq`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return m > 0 ? `${h} soat ${m} daq` : `${h} soat`
 }
 
 function dismissSuccess() {
@@ -582,16 +524,7 @@ onMounted(async () => {
                 Fan
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Davomiylik
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Savollar
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                O'tish balli
-              </th>
-              <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Urinishlar
               </th>
               <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Holat
@@ -622,22 +555,7 @@ onMounted(async () => {
               </td>
               <td class="whitespace-nowrap px-6 py-4">
                 <span class="text-sm text-muted-foreground">
-                  {{ formatDuration(test.duration_minutes) }}
-                </span>
-              </td>
-              <td class="whitespace-nowrap px-6 py-4">
-                <span class="text-sm text-muted-foreground">
-                  {{ test.questions_count ?? 0 }} / {{ test.max_questions }}
-                </span>
-              </td>
-              <td class="whitespace-nowrap px-6 py-4">
-                <span class="text-sm text-muted-foreground">
-                  {{ test.passing_score }}%
-                </span>
-              </td>
-              <td class="whitespace-nowrap px-6 py-4">
-                <span class="text-sm text-muted-foreground">
-                  {{ test.max_attempts }}
+                  {{ test.questions_count ?? 0 }}
                 </span>
               </td>
               <td class="whitespace-nowrap px-6 py-4">
@@ -669,7 +587,7 @@ onMounted(async () => {
 
             <!-- Empty State -->
             <tr v-if="tests.length === 0">
-              <td colspan="8" class="px-6 py-12 text-center">
+              <td colspan="5" class="px-6 py-12 text-center">
                 <p class="text-sm text-muted-foreground">Testlar topilmadi</p>
               </td>
             </tr>
@@ -840,144 +758,17 @@ onMounted(async () => {
                     </p>
                   </div>
 
-                  <!-- Duration & Max Questions (side by side) -->
-                  <div class="grid grid-cols-2 gap-4">
-                    <!-- Duration -->
-                    <div class="space-y-2">
-                      <label for="test_duration" class="text-sm font-medium text-foreground">
-                        Davomiylik (daq)
-                      </label>
-                      <input
-                        id="test_duration"
-                        v-model.number="form.duration_minutes"
-                        type="number"
-                        min="1"
-                        placeholder="60"
-                        class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        :class="{ 'border-destructive': formErrors.duration_minutes }"
-                      />
-                      <p v-if="formErrors.duration_minutes" class="text-xs text-destructive">
-                        {{ formErrors.duration_minutes }}
-                      </p>
-                    </div>
-
-                    <!-- Max Questions -->
-                    <div class="space-y-2">
-                      <label for="test_max_questions" class="text-sm font-medium text-foreground">
-                        Savollar soni
-                      </label>
-                      <input
-                        id="test_max_questions"
-                        v-model.number="form.max_questions"
-                        type="number"
-                        min="1"
-                        placeholder="20"
-                        class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        :class="{ 'border-destructive': formErrors.max_questions }"
-                      />
-                      <p v-if="formErrors.max_questions" class="text-xs text-destructive">
-                        {{ formErrors.max_questions }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Passing Score & Max Attempts (side by side) -->
-                  <div class="grid grid-cols-2 gap-4">
-                    <!-- Passing Score -->
-                    <div class="space-y-2">
-                      <label for="test_passing_score" class="text-sm font-medium text-foreground">
-                        O'tish balli (%)
-                      </label>
-                      <input
-                        id="test_passing_score"
-                        v-model.number="form.passing_score"
-                        type="number"
-                        min="0"
-                        max="100"
-                        placeholder="60"
-                        class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        :class="{ 'border-destructive': formErrors.passing_score }"
-                      />
-                      <p v-if="formErrors.passing_score" class="text-xs text-destructive">
-                        {{ formErrors.passing_score }}
-                      </p>
-                    </div>
-
-                    <!-- Max Attempts -->
-                    <div class="space-y-2">
-                      <label for="test_max_attempts" class="text-sm font-medium text-foreground">
-                        Urinishlar soni
-                      </label>
-                      <input
-                        id="test_max_attempts"
-                        v-model.number="form.max_attempts"
-                        type="number"
-                        min="1"
-                        placeholder="1"
-                        class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                        :class="{ 'border-destructive': formErrors.max_attempts }"
-                      />
-                      <p v-if="formErrors.max_attempts" class="text-xs text-destructive">
-                        {{ formErrors.max_attempts }}
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Checkboxes -->
-                  <div class="space-y-4 rounded-lg border border-border bg-muted/30 p-4">
-                    <p class="text-sm font-medium text-foreground">Sozlamalar</p>
-
-                    <!-- Shuffle Questions -->
-                    <div class="flex items-center gap-3">
-                      <input
-                        id="shuffle_questions"
-                        v-model="form.shuffle_questions"
-                        type="checkbox"
-                        class="h-4 w-4 rounded border border-input accent-primary"
-                      />
-                      <label for="shuffle_questions" class="text-sm text-foreground">
-                        Savollarni aralashtirish
-                      </label>
-                    </div>
-
-                    <!-- Shuffle Answers -->
-                    <div class="flex items-center gap-3">
-                      <input
-                        id="shuffle_answers"
-                        v-model="form.shuffle_answers"
-                        type="checkbox"
-                        class="h-4 w-4 rounded border border-input accent-primary"
-                      />
-                      <label for="shuffle_answers" class="text-sm text-foreground">
-                        Javoblarni aralashtirish
-                      </label>
-                    </div>
-
-                    <!-- Show Results -->
-                    <div class="flex items-center gap-3">
-                      <input
-                        id="show_results"
-                        v-model="form.show_results"
-                        type="checkbox"
-                        class="h-4 w-4 rounded border border-input accent-primary"
-                      />
-                      <label for="show_results" class="text-sm text-foreground">
-                        Natijalarni ko'rsatish
-                      </label>
-                    </div>
-
-                    <!-- Is Active -->
-                    <div class="flex items-center gap-3">
-                      <input
-                        id="is_active"
-                        v-model="form.is_active"
-                        type="checkbox"
-                        class="h-4 w-4 rounded border border-input accent-primary"
-                      />
-                      <label for="is_active" class="text-sm text-foreground">
-                        Faol
-                      </label>
-                    </div>
+                  <!-- Is Active -->
+                  <div class="flex items-center gap-3">
+                    <input
+                      id="is_active"
+                      v-model="form.is_active"
+                      type="checkbox"
+                      class="h-4 w-4 rounded border border-input accent-primary"
+                    />
+                    <label for="is_active" class="text-sm text-foreground">
+                      Faol
+                    </label>
                   </div>
 
                   <!-- Question Picker -->

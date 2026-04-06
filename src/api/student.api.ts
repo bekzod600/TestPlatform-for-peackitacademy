@@ -20,6 +20,7 @@ import type {
   TestAnswerWithDetails,
   TestScoreResult,
   Test,
+  EffectiveTestSettings,
 } from '@/types'
 import type { AttemptStatus } from '@/lib/constants'
 
@@ -128,6 +129,7 @@ export interface StartTestResult {
   attempt: TestAttempt
   test: Test
   questions: QuestionWithOptions[]
+  effectiveSettings: EffectiveTestSettings
 }
 
 /**
@@ -165,7 +167,38 @@ export async function startTestAttempt(
     }
     const test = testData as Test
 
-    // 2. Check max_attempts
+    // 1b. Fetch assignment override settings (COALESCE pattern)
+    let overrides: {
+      duration_minutes: number | null
+      max_questions: number | null
+      passing_score: number | null
+      max_attempts: number | null
+      shuffle_questions: boolean | null
+      shuffle_answers: boolean | null
+      show_results: boolean | null
+    } | null = null
+
+    if (assignmentId) {
+      const { data: aData } = await supabase
+        .from('test_assignments')
+        .select('duration_minutes, max_questions, passing_score, max_attempts, shuffle_questions, shuffle_answers, show_results')
+        .eq('id', assignmentId)
+        .single()
+      overrides = aData
+    }
+
+    // Effective settings: assignment override ?? test default
+    const effective: EffectiveTestSettings = {
+      duration_minutes: overrides?.duration_minutes ?? test.duration_minutes,
+      max_questions: overrides?.max_questions ?? test.max_questions,
+      passing_score: overrides?.passing_score ?? test.passing_score,
+      max_attempts: overrides?.max_attempts ?? test.max_attempts,
+      shuffle_questions: overrides?.shuffle_questions ?? test.shuffle_questions,
+      shuffle_answers: overrides?.shuffle_answers ?? test.shuffle_answers,
+      show_results: overrides?.show_results ?? test.show_results,
+    }
+
+    // 2. Check max_attempts using effective settings
     const { count: attemptCount } = await supabase
       .from('test_attempts')
       .select('*', { count: 'exact', head: true })
@@ -178,10 +211,10 @@ export async function startTestAttempt(
         ATTEMPT_STATUSES.CANCELLED,
       ])
 
-    if ((attemptCount ?? 0) >= test.max_attempts) {
+    if ((attemptCount ?? 0) >= effective.max_attempts) {
       return {
         data: null,
-        error: `Maximum attempts (${test.max_attempts}) reached for this test`,
+        error: `Maximum attempts (${effective.max_attempts}) reached for this test`,
         success: false,
       }
     }
@@ -208,7 +241,7 @@ export async function startTestAttempt(
           test_id: testId,
           assignment_id: assignmentId,
           status: ATTEMPT_STATUSES.IN_PROGRESS,
-          total_questions: test.max_questions,
+          total_questions: effective.max_questions,
           violation_count: 0,
         })
         .select()
@@ -230,7 +263,7 @@ export async function startTestAttempt(
       .select('question_id')
       .eq('test_id', testId)
       .order('sort_order', { ascending: true })
-      .limit(test.max_questions)
+      .limit(effective.max_questions)
 
     if (linkError) {
       return {
@@ -266,12 +299,12 @@ export async function startTestAttempt(
 
     let questions = (rawQuestions ?? []) as QuestionWithOptions[]
 
-    // 5. Shuffle if configured
-    if (test.shuffle_questions) {
+    // 5. Shuffle if configured (using effective settings)
+    if (effective.shuffle_questions) {
       questions = shuffle(questions)
     }
 
-    if (test.shuffle_answers) {
+    if (effective.shuffle_answers) {
       questions = questions.map((q) => ({
         ...q,
         answer_options: shuffle(q.answer_options),
@@ -299,6 +332,7 @@ export async function startTestAttempt(
         attempt,
         test,
         questions: sanitizedQuestions,
+        effectiveSettings: effective,
       },
       error: null,
       success: true,

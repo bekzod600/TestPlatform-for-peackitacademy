@@ -142,8 +142,9 @@ function startTest(assignment: TestAssignmentWithDetails) {
 }
 
 function confirmStartTest() {
+  if (!selectedAssignment.value) return
   showRulesModal.value = false
-  router.push('/student/test')
+  router.push(`/student/test?assignmentId=${selectedAssignment.value.id}`)
 }
 
 onMounted(loadDashboard)
@@ -291,15 +292,15 @@ onMounted(loadDashboard)
               <div class="grid grid-cols-2 gap-3 mb-4 text-sm">
                 <div class="flex items-center gap-2 text-muted-foreground">
                   <Timer class="w-4 h-4 shrink-0" />
-                  <span>{{ assignment.test?.duration_minutes }} daqiqa</span>
+                  <span>{{ assignment.duration_minutes ?? assignment.test?.duration_minutes }} daqiqa</span>
                 </div>
                 <div class="flex items-center gap-2 text-muted-foreground">
                   <ClipboardList class="w-4 h-4 shrink-0" />
-                  <span>{{ assignment.test?.max_questions }} savol</span>
+                  <span>{{ assignment.max_questions ?? assignment.test?.max_questions }} savol</span>
                 </div>
                 <div class="flex items-center gap-2 text-muted-foreground">
                   <RefreshCw class="w-4 h-4 shrink-0" />
-                  <span>{{ getRemainingAttempts(assignment.test_id, assignment.test?.max_attempts || 1) }}/{{ assignment.test?.max_attempts }} urinish</span>
+                  <span>{{ getRemainingAttempts(assignment.test_id, assignment.max_attempts ?? assignment.test?.max_attempts ?? 1) }}/{{ assignment.max_attempts ?? assignment.test?.max_attempts }} urinish</span>
                 </div>
                 <div class="flex items-center gap-2 text-muted-foreground">
                   <Calendar class="w-4 h-4 shrink-0" />
@@ -309,7 +310,7 @@ onMounted(loadDashboard)
 
               <!-- Attempts Warning -->
               <div
-                v-if="getRemainingAttempts(assignment.test_id, assignment.test?.max_attempts || 1) === 0"
+                v-if="getRemainingAttempts(assignment.test_id, assignment.max_attempts ?? assignment.test?.max_attempts ?? 1) === 0"
                 class="flex items-start gap-2 p-3 rounded-lg bg-red-500/5 border border-red-500/20 mb-4"
               >
                 <AlertTriangle class="w-4 h-4 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
@@ -320,7 +321,7 @@ onMounted(loadDashboard)
 
               <!-- Action Button -->
               <button
-                v-if="getTestAvailability(assignment).available && getRemainingAttempts(assignment.test_id, assignment.test?.max_attempts || 1) > 0"
+                v-if="getTestAvailability(assignment).available && getRemainingAttempts(assignment.test_id, assignment.max_attempts ?? assignment.test?.max_attempts ?? 1) > 0"
                 @click="startTest(assignment)"
                 class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 text-sm font-medium transition-colors shadow-sm"
               >
