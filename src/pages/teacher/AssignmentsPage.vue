@@ -196,8 +196,8 @@ async function handleSubmit() {
     const payload: TestAssignmentInsert = {
       test_id: form.test_id!,
       user_group_id: form.user_group_id!,
-      start_time: form.start_time,
-      end_time: form.end_time,
+      start_time: new Date(form.start_time).toISOString(),
+      end_time: new Date(form.end_time).toISOString(),
       assigned_by: teacherId.value,
       duration_minutes: form.duration_minutes || null,
       max_questions: form.max_questions || null,

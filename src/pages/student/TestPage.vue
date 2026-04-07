@@ -82,7 +82,15 @@ async function handleFinishTest(status: AttemptStatus = ATTEMPT_STATUSES.COMPLET
   timer.stop()
   security.deactivate()
 
-  await testStore.finishTest(status, reason)
+  try {
+    await testStore.finishTest(status, reason)
+  } catch (err) {
+    console.error('Error finishing test:', err)
+  }
+
+  // Always clear test state and navigate to results, even if API failed.
+  // clearTest() ensures isActive becomes false so the router guard won't block.
+  testStore.clearTest()
   router.push('/student/results')
 }
 
