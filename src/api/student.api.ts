@@ -446,6 +446,54 @@ export async function finishTestAttempt(
       }
     }
 
+    // 1b. Insert test_answers rows for unanswered questions so that
+    //     the score calculation and detailed review include ALL questions.
+    try {
+      // Get question IDs that already have answers
+      const { data: existingAnswers } = await supabase
+        .from('test_answers')
+        .select('question_id')
+        .eq('attempt_id', attemptId)
+
+      const answeredQuestionIds = new Set(
+        (existingAnswers ?? []).map((a: { question_id: number }) => a.question_id),
+      )
+
+      // Get all question IDs for this test via junction table
+      const attempt = updatedAttempt as TestAttempt
+      const { data: testQuestionLinks } = await supabase
+        .from('test_questions')
+        .select('question_id')
+        .eq('test_id', attempt.test_id)
+        .order('sort_order', { ascending: true })
+        .limit(attempt.total_questions)
+
+      const allQuestionIds = (testQuestionLinks ?? []).map(
+        (l: { question_id: number }) => l.question_id,
+      )
+
+      // Find unanswered questions and insert empty test_answers rows
+      const unanswered = allQuestionIds.filter(
+        (qId: number) => !answeredQuestionIds.has(qId),
+      )
+      if (unanswered.length > 0) {
+        await supabase.from('test_answers').insert(
+          unanswered.map((questionId: number) => ({
+            attempt_id: attemptId,
+            question_id: questionId,
+            selected_option_id: null,
+            is_correct: null,
+            time_spent_seconds: null,
+            answered_at: null,
+          })),
+        )
+      }
+    } catch (err) {
+      // Non-critical: if this fails, score calculation will still work
+      // but skipped questions won't appear in detailed review
+      console.error('Failed to insert unanswered question rows:', err)
+    }
+
     // 2. Call DB function to calculate scores
     const { data: scoreData, error: rpcError } = await supabase.rpc(
       'calculate_test_score',

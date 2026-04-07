@@ -55,39 +55,53 @@ DECLARE
   v_earned_score INTEGER := 0;
   v_percentage DECIMAL(5, 2) := 0;
   v_time_spent INTEGER := 0;
+  v_answered_count INTEGER := 0;
 BEGIN
   -- Mark each answer correct/incorrect
+  -- Skipped answers (selected_option_id IS NULL) get is_correct = NULL
   UPDATE public.test_answers ta
-  SET is_correct = (
-    ta.selected_option_id IS NOT NULL
-    AND EXISTS (
+  SET is_correct = CASE
+    WHEN ta.selected_option_id IS NULL THEN NULL
+    WHEN EXISTS (
       SELECT 1
       FROM public.answer_options ao
       WHERE ao.id = ta.selected_option_id
         AND ao.is_correct = true
-    )
-  )
+    ) THEN true
+    ELSE false
+  END
   WHERE ta.attempt_id = p_attempt_id;
 
-  -- Count answers
+  -- Count answers from test_answers table
   SELECT
     COUNT(*) FILTER (WHERE ta.is_correct = true),
     COUNT(*) FILTER (WHERE ta.is_correct = false),
-    COUNT(*) FILTER (WHERE ta.selected_option_id IS NULL)
+    COUNT(*) FILTER (WHERE ta.is_correct IS NULL)
   INTO v_correct, v_wrong, v_skipped
   FROM public.test_answers ta
   WHERE ta.attempt_id = p_attempt_id;
 
-  -- Get total questions and max score via junction table
-  SELECT
-    att.total_questions,
-    COALESCE(SUM(q.points), 0)
-  INTO v_total, v_max_score
+  -- Get total questions from the attempt (set at test start)
+  SELECT att.total_questions
+  INTO v_total
   FROM public.test_attempts att
-  JOIN public.test_questions tq ON tq.test_id = att.test_id
-  JOIN public.questions q ON q.id = tq.question_id AND q.is_active = true
-  WHERE att.id = p_attempt_id
-  GROUP BY att.total_questions;
+  WHERE att.id = p_attempt_id;
+
+  -- Answered count = rows in test_answers that have a selected option
+  v_answered_count := v_correct + v_wrong;
+
+  -- Skipped = total questions minus answered (includes both
+  -- test_answers rows with NULL selected_option_id AND questions
+  -- that have no test_answers row at all)
+  v_skipped := v_total - v_answered_count;
+
+  -- Calculate max_score from only the questions in this attempt's test_answers
+  -- (all questions now have test_answers rows, including unanswered ones)
+  SELECT COALESCE(SUM(q.points), 0)
+  INTO v_max_score
+  FROM public.test_answers ta
+  JOIN public.questions q ON q.id = ta.question_id
+  WHERE ta.attempt_id = p_attempt_id;
 
   -- Calculate earned score
   SELECT
@@ -97,9 +111,10 @@ BEGIN
   JOIN public.questions q ON q.id = ta.question_id
   WHERE ta.attempt_id = p_attempt_id;
 
-  -- Calculate percentage
-  IF v_max_score > 0 THEN
-    v_percentage := ROUND((v_earned_score::DECIMAL / v_max_score) * 100, 2);
+  -- Calculate percentage based on total questions (not max_score)
+  -- This gives a straightforward "X out of Y questions correct" percentage
+  IF v_total > 0 THEN
+    v_percentage := ROUND((v_correct::DECIMAL / v_total) * 100, 2);
   END IF;
 
   -- Calculate time spent
