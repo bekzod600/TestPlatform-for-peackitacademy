@@ -30,7 +30,11 @@ const testStore = useStudentTestStore()
 
 const isLoading = ref(true)
 const showFinishModal = ref(false)
-const violationWarning = ref('')
+
+// Violation modal state
+const showViolationModal = ref(false)
+const violationMessage = ref('')
+const isTestTerminated = ref(false)
 
 // Complaint state
 const showComplaintModal = ref(false)
@@ -40,22 +44,31 @@ const complaintError = ref('')
 const complaintSuccess = ref('')
 /** Set of question IDs that already have complaints submitted in this session */
 const complainedQuestionIds = ref<Set<number>>(new Set())
+/** Total complaint count for this test (max 2) */
+const totalComplaintCount = ref(0)
 
 // Initialize timer with 0 seconds (will be updated once test loads)
 const timer = useTimer(0, () => {
   handleFinishTest(ATTEMPT_STATUSES.TIMED_OUT, 'time_expired')
 })
 
-// Initialize security
-const security = useTestSecurity((count) => {
-  if (count >= ANTI_CHEAT.MAX_TAB_SWITCHES) {
-    violationWarning.value = `Siz ${ANTI_CHEAT.MAX_TAB_SWITCHES} marta boshqa oynaga o'tdingiz. Test bekor qilindi!`
-    handleFinishTest(ATTEMPT_STATUSES.VIOLATION, 'Maximum tab switches exceeded')
-  } else {
-    violationWarning.value = `Ogohlantirish! Boshqa oynaga o'tdingiz (${count}/${ANTI_CHEAT.MAX_TAB_SWITCHES})`
-    setTimeout(() => { violationWarning.value = '' }, 5000)
-    // Also update store violation count
-    testStore.incrementViolation()
+// Initialize security — only tab switches count toward the 3-strike termination
+const security = useTestSecurity((type, tabCount) => {
+  // Always update store violation count for any violation type
+  testStore.incrementViolation()
+
+  // Only tab/window switches trigger the modal warning and 3-strike rule
+  if (type === 'tab_switch') {
+    if (tabCount >= ANTI_CHEAT.MAX_TAB_SWITCHES) {
+      violationMessage.value = `Siz ${ANTI_CHEAT.MAX_TAB_SWITCHES} marta boshqa oynaga o'tdingiz. Test bekor qilindi!`
+      isTestTerminated.value = true
+      showViolationModal.value = true
+      handleFinishTest(ATTEMPT_STATUSES.VIOLATION, 'Maximum tab switches exceeded')
+    } else {
+      violationMessage.value = `Ogohlantirish! Siz boshqa oynaga o'tdingiz (${tabCount}/${ANTI_CHEAT.MAX_TAB_SWITCHES}). Yana ${ANTI_CHEAT.MAX_TAB_SWITCHES - tabCount} marta qoldi.`
+      isTestTerminated.value = false
+      showViolationModal.value = true
+    }
   }
 })
 
@@ -133,6 +146,7 @@ async function handleSubmitComplaint() {
     if (result.success) {
       complaintSuccess.value = 'Shikoyat muvaffaqiyatli yuborildi'
       complainedQuestionIds.value.add(currentQuestion.value.id)
+      totalComplaintCount.value++
       setTimeout(() => {
         showComplaintModal.value = false
         complaintSuccess.value = ''
@@ -253,22 +267,6 @@ onUnmounted(() => {
 
   <!-- Test Interface -->
   <div v-else class="fixed inset-0 flex flex-col bg-background">
-    <!-- Violation Warning Banner -->
-    <Transition
-      enter-active-class="transition-all duration-300"
-      leave-active-class="transition-all duration-300"
-      enter-from-class="opacity-0 -translate-y-full"
-      leave-to-class="opacity-0 -translate-y-full"
-    >
-      <div
-        v-if="violationWarning"
-        class="fixed top-0 left-0 right-0 z-[60] bg-destructive text-destructive-foreground px-4 py-3 text-center text-sm font-medium flex items-center justify-center gap-2 shadow-lg"
-      >
-        <ShieldAlert class="w-5 h-5" />
-        {{ violationWarning }}
-      </div>
-    </Transition>
-
     <!-- Top Bar (Compact & Clean) -->
     <header class="flex-shrink-0 bg-card border-b border-border shadow-sm">
       <div class="max-w-5xl mx-auto flex items-center justify-between h-16 px-4 lg:px-6">
@@ -330,17 +328,17 @@ onUnmounted(() => {
                 </span>
                 <button
                   @click="openComplaintModal"
-                  :disabled="complainedQuestionIds.has(currentQuestion.id)"
+                  :disabled="complainedQuestionIds.has(currentQuestion.id) || totalComplaintCount >= 2"
                   :class="[
                     'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                    complainedQuestionIds.has(currentQuestion.id)
+                    complainedQuestionIds.has(currentQuestion.id) || totalComplaintCount >= 2
                       ? 'bg-muted text-muted-foreground cursor-not-allowed'
                       : 'bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20'
                   ]"
-                  :title="complainedQuestionIds.has(currentQuestion.id) ? 'Shikoyat yuborilgan' : 'Shikoyat bildirish'"
+                  :title="totalComplaintCount >= 2 ? 'Shikoyat limiti tugadi (2/2)' : complainedQuestionIds.has(currentQuestion.id) ? 'Shikoyat yuborilgan' : 'Shikoyat bildirish'"
                 >
                   <Flag class="w-3.5 h-3.5" />
-                  {{ complainedQuestionIds.has(currentQuestion.id) ? 'Yuborilgan' : 'Shikoyat' }}
+                  {{ complainedQuestionIds.has(currentQuestion.id) ? 'Yuborilgan' : totalComplaintCount >= 2 ? 'Limit (2/2)' : 'Shikoyat' }}
                 </button>
               </div>
               <!-- Question image (optional) -->
@@ -491,6 +489,41 @@ onUnmounted(() => {
                 <span v-else>Yakunlash</span>
               </button>
             </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Violation Warning Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition-opacity duration-200"
+        leave-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showViolationModal"
+          class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        >
+          <div class="w-full max-w-sm bg-card rounded-xl shadow-xl border border-destructive/30 animate-scale-in p-6 text-center">
+            <div class="flex items-center justify-center w-14 h-14 rounded-full bg-destructive/10 mx-auto mb-4">
+              <ShieldAlert class="w-7 h-7 text-destructive" />
+            </div>
+            <h3 class="text-lg font-bold text-destructive mb-3">Xavfsizlik ogohlantirishlari</h3>
+            <p class="text-sm text-foreground mb-6 leading-relaxed">
+              {{ violationMessage }}
+            </p>
+            <button
+              v-if="!isTestTerminated"
+              @click="showViolationModal = false"
+              class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            >
+              Tushundim, davom etaman
+            </button>
+            <p v-else class="text-xs text-muted-foreground">
+              Test yakunlandi. Siz natijalar sahifasiga yo'naltirilmoqdasiz...
+            </p>
           </div>
         </div>
       </Transition>

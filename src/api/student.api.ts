@@ -729,7 +729,7 @@ export async function submitQuestionComplaint(
       return { data: null, error: 'Shikoyat matni 2000 ta belgidan oshmasligi kerak', success: false }
     }
 
-    // Check for existing complaint (prevent duplicates)
+    // Check for existing complaint on same question (prevent duplicates)
     const { data: existing } = await supabase
       .from('question_complaints')
       .select('id')
@@ -739,6 +739,17 @@ export async function submitQuestionComplaint(
 
     if (existing) {
       return { data: null, error: 'Bu savol uchun allaqachon shikoyat yuborgansiz', success: false }
+    }
+
+    // Check per-test complaint limit (max 2 complaints per user per test)
+    const { count: complaintCount } = await supabase
+      .from('question_complaints')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', payload.user_id)
+      .eq('test_id', payload.test_id)
+
+    if ((complaintCount ?? 0) >= 2) {
+      return { data: null, error: 'Bitta testda faqat 2 ta shikoyat yuborish mumkin', success: false }
     }
 
     const { data, error } = await supabase

@@ -21,25 +21,25 @@ export interface ViolationEvent {
  * during a test session.
  *
  * @param onViolation - Callback invoked each time a violation is detected.
- *                      Called with the current cumulative violation count.
- *                      When the count reaches `ANTI_CHEAT.MAX_TAB_SWITCHES`
- *                      the callback should terminate the test.
+ *                      Receives the violation type and the tab-switch count
+ *                      (only tab switches count toward test termination).
  *
  * @example
  * ```ts
- * const { violationCount, activate, deactivate } = useTestSecurity((count) => {
- *   if (count >= ANTI_CHEAT.MAX_TAB_SWITCHES) {
+ * const { tabSwitchCount, activate, deactivate } = useTestSecurity((type, tabCount) => {
+ *   if (tabCount >= ANTI_CHEAT.MAX_TAB_SWITCHES) {
  *     finishTestWithViolation()
  *   }
  * })
  * activate()
  * ```
  */
-export function useTestSecurity(onViolation?: (count: number) => void) {
+export function useTestSecurity(onViolation?: (type: ViolationType, tabSwitchCount: number) => void) {
   // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
   const violationCount = ref<number>(0)
+  const tabSwitchCount = ref<number>(0)
   const isSecurityActive = ref<boolean>(false)
 
   // Track bound listeners so we can cleanly remove them
@@ -49,9 +49,12 @@ export function useTestSecurity(onViolation?: (count: number) => void) {
   // Internal helpers
   // ---------------------------------------------------------------------------
 
-  function recordViolation(_type: ViolationType): void {
+  function recordViolation(type: ViolationType): void {
     violationCount.value++
-    onViolation?.(violationCount.value)
+    if (type === 'tab_switch') {
+      tabSwitchCount.value++
+    }
+    onViolation?.(type, tabSwitchCount.value)
   }
 
   function addListener(
@@ -197,6 +200,7 @@ export function useTestSecurity(onViolation?: (count: number) => void) {
   // ---------------------------------------------------------------------------
   return {
     violationCount,
+    tabSwitchCount,
     isSecurityActive,
     activate,
     deactivate,
