@@ -9,7 +9,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { SESSION, ATTEMPT_STATUSES, ANTI_CHEAT } from '@/lib/constants'
+import { SESSION } from '@/lib/constants'
 import type { ActiveTestState, QuestionWithOptions, TestScoreResult } from '@/types'
 import type { AttemptStatus } from '@/lib/constants'
 import {
@@ -207,19 +207,15 @@ export const useStudentTestStore = defineStore('student-test', () => {
   // ---------------------------------------------------------
 
   /**
-   * Increment the tab-switch violation counter.
-   * If the count reaches MAX_TAB_SWITCHES, automatically finish
-   * the test with a "violation" status.
+   * Increment the violation counter and persist to storage.
+   * Termination logic is handled by the TestPage component's
+   * security callback — the store only tracks the count.
    */
   function incrementViolation(): void {
     if (!activeTest.value) return
 
     activeTest.value.violation_count++
     saveToStorage()
-
-    if (activeTest.value.violation_count >= ANTI_CHEAT.MAX_TAB_SWITCHES) {
-      finishTest(ATTEMPT_STATUSES.VIOLATION, 'Maximum tab switches exceeded')
-    }
   }
 
   // ---------------------------------------------------------

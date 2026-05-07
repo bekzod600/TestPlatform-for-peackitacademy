@@ -116,7 +116,7 @@ async function handleFinishTest(status: AttemptStatus = ATTEMPT_STATUSES.COMPLET
   // Always clear test state and navigate to results, even if API failed.
   // clearTest() ensures isActive becomes false so the router guard won't block.
   testStore.clearTest()
-  router.push('/student/results')
+  await router.push('/student/results')
 }
 
 // Complaint functions
