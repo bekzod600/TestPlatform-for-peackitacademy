@@ -21,6 +21,8 @@ import type {
   TestScoreResult,
   Test,
   EffectiveTestSettings,
+  QuestionComplaint,
+  QuestionComplaintInsert,
 } from '@/types'
 import type { AttemptStatus } from '@/lib/constants'
 
@@ -699,6 +701,66 @@ export async function fetchAttemptDetails(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to fetch attempt details'
+    return { data: null, error: message, success: false }
+  }
+}
+
+// =============================================================
+// Question Complaints
+// =============================================================
+
+/**
+ * Submit a complaint about a question during a test attempt.
+ * Each student can only submit one complaint per question per attempt.
+ */
+export async function submitQuestionComplaint(
+  payload: QuestionComplaintInsert,
+): Promise<ApiResponse<QuestionComplaint>> {
+  try {
+    if (!payload.complaint_text.trim()) {
+      return { data: null, error: 'Shikoyat matni bo\'sh bo\'lishi mumkin emas', success: false }
+    }
+
+    if (payload.complaint_text.trim().length < 10) {
+      return { data: null, error: 'Shikoyat matni kamida 10 ta belgidan iborat bo\'lishi kerak', success: false }
+    }
+
+    if (payload.complaint_text.length > 2000) {
+      return { data: null, error: 'Shikoyat matni 2000 ta belgidan oshmasligi kerak', success: false }
+    }
+
+    // Check for existing complaint (prevent duplicates)
+    const { data: existing } = await supabase
+      .from('question_complaints')
+      .select('id')
+      .eq('attempt_id', payload.attempt_id)
+      .eq('question_id', payload.question_id)
+      .maybeSingle()
+
+    if (existing) {
+      return { data: null, error: 'Bu savol uchun allaqachon shikoyat yuborgansiz', success: false }
+    }
+
+    const { data, error } = await supabase
+      .from('question_complaints')
+      .insert({
+        user_id: payload.user_id,
+        test_id: payload.test_id,
+        question_id: payload.question_id,
+        attempt_id: payload.attempt_id,
+        complaint_text: payload.complaint_text.trim(),
+        status: 'pending',
+      })
+      .select()
+      .single()
+
+    if (error) {
+      return { data: null, error: error.message, success: false }
+    }
+
+    return { data: data as QuestionComplaint, error: null, success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Shikoyat yuborishda xatolik'
     return { data: null, error: message, success: false }
   }
 }

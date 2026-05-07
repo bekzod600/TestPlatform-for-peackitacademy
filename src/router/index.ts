@@ -181,6 +181,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Natijalar' },
       },
       {
+        path: 'complaints',
+        name: 'AdminComplaints',
+        component: () => import('@/pages/admin/ComplaintsPage.vue'),
+        meta: { title: 'Shikoyatlar' },
+      },
+      {
         path: 'audit-log',
         name: 'AdminAuditLog',
         component: () => import('@/pages/admin/AuditLogPage.vue'),

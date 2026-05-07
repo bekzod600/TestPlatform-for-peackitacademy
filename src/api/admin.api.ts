@@ -67,7 +67,22 @@ import type {
   // Attempts
   AttemptListFilters,
   TestAttemptWithDetails,
+  // Complaints
+  QuestionComplaintWithDetails,
+  QuestionComplaintUpdate,
 } from '@/types'
+
+// =============================================================
+// Utility: sanitize user input for Supabase ilike/or filters
+// =============================================================
+
+/**
+ * Escape special PostgreSQL LIKE pattern characters (%, _, \)
+ * to prevent pattern injection in ilike/or queries.
+ */
+function sanitizeSearch(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&')
+}
 
 // =============================================================
 // USERS
@@ -102,8 +117,9 @@ export async function fetchUsers(
         q = q.eq('is_active', filters.is_active)
       }
       if (filters.search) {
+        const s = sanitizeSearch(filters.search)
         q = q.or(
-          `full_name.ilike.%${filters.search}%,username.ilike.%${filters.search}%`,
+          `full_name.ilike.%${s}%,username.ilike.%${s}%`,
         )
       }
       return q
@@ -362,8 +378,9 @@ export async function fetchTests(
         q = q.eq('created_by', filters.created_by)
       }
       if (filters.search) {
+        const s = sanitizeSearch(filters.search)
         q = q.or(
-          `name.ilike.%${filters.search}%,description.ilike.%${filters.search}%`,
+          `name.ilike.%${s}%,description.ilike.%${s}%`,
         )
       }
       return q
@@ -497,7 +514,7 @@ export async function fetchQuestions(
         q = q.eq('created_by', filters.created_by)
       }
       if (filters.search) {
-        q = q.ilike('question_text', `%${filters.search}%`)
+        q = q.ilike('question_text', `%${sanitizeSearch(filters.search)}%`)
       }
       return q
     },
@@ -1105,4 +1122,93 @@ export async function fetchDashboardStats(): Promise<ApiResponse<DashboardStats>
     const message = err instanceof Error ? err.message : 'Failed to fetch dashboard stats'
     return { data: null, error: message, success: false }
   }
+}
+
+// =============================================================
+// QUESTION COMPLAINTS
+// =============================================================
+
+export interface ComplaintListFilters extends ListFilters {
+  status?: string
+  user_id?: number
+  test_id?: number
+  question_id?: number
+}
+
+/**
+ * Fetch paginated question complaints with related data.
+ */
+export async function fetchComplaints(
+  filters: ComplaintListFilters = {},
+): Promise<PaginatedResponse<QuestionComplaintWithDetails>> {
+  return fetchPaginated<QuestionComplaintWithDetails>(
+    'question_complaints',
+    { ...filters, sort_by: filters.sort_by ?? 'created_at', sort_order: filters.sort_order ?? 'desc' },
+    '*, user:users!question_complaints_user_id_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at), test:tests(*), question:questions(*, answer_options(*)), reviewer:users!question_complaints_reviewed_by_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at)',
+    (qb) => {
+      let q = qb
+      if (filters.status) {
+        q = q.eq('status', filters.status)
+      }
+      if (filters.user_id !== undefined) {
+        q = q.eq('user_id', filters.user_id)
+      }
+      if (filters.test_id !== undefined) {
+        q = q.eq('test_id', filters.test_id)
+      }
+      if (filters.question_id !== undefined) {
+        q = q.eq('question_id', filters.question_id)
+      }
+      if (filters.search) {
+        q = q.ilike('complaint_text', `%${sanitizeSearch(filters.search)}%`)
+      }
+      return q
+    },
+  )
+}
+
+/**
+ * Update a complaint status and admin note.
+ */
+export async function updateComplaint(
+  id: number,
+  payload: QuestionComplaintUpdate,
+  actorId?: number | null,
+): Promise<ApiResponse<QuestionComplaintWithDetails>> {
+  const { data, error } = await supabase
+    .from('question_complaints')
+    .update({
+      ...payload,
+      reviewed_by: actorId ?? payload.reviewed_by,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*, user:users!question_complaints_user_id_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at), test:tests(*), question:questions(*, answer_options(*)), reviewer:users!question_complaints_reviewed_by_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at)')
+    .single()
+
+  if (error) {
+    return { data: null, error: error.message, success: false }
+  }
+
+  await logAudit({
+    user_id: actorId,
+    action: 'update',
+    entity_type: 'question_complaint',
+    entity_id: id,
+    new_data: payload as Record<string, unknown>,
+  })
+
+  return { data: data as QuestionComplaintWithDetails, error: null, success: true }
+}
+
+/** Delete a complaint. */
+export async function deleteComplaint(
+  id: number,
+  actorId?: number | null,
+): Promise<ApiResponse<null>> {
+  const result = await deleteRow('question_complaints', id)
+  if (result.success) {
+    await logAudit({ user_id: actorId, action: 'delete', entity_type: 'question_complaint', entity_id: id })
+  }
+  return result
 }

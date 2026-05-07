@@ -12,6 +12,8 @@ import {
   ShieldAlert,
   Eye,
   ClipboardList,
+  Flag,
+  X,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useStudentTestStore } from '@/stores/student/test'
@@ -19,6 +21,7 @@ import { useTimer } from '@/composables/useTimer'
 import { useTestSecurity } from '@/composables/useTestSecurity'
 import { ANTI_CHEAT, ATTEMPT_STATUSES } from '@/lib/constants'
 import type { AttemptStatus } from '@/lib/constants'
+import { submitQuestionComplaint } from '@/api/student.api'
 
 const router = useRouter()
 const route = useRoute()
@@ -28,6 +31,15 @@ const testStore = useStudentTestStore()
 const isLoading = ref(true)
 const showFinishModal = ref(false)
 const violationWarning = ref('')
+
+// Complaint state
+const showComplaintModal = ref(false)
+const complaintText = ref('')
+const isSubmittingComplaint = ref(false)
+const complaintError = ref('')
+const complaintSuccess = ref('')
+/** Set of question IDs that already have complaints submitted in this session */
+const complainedQuestionIds = ref<Set<number>>(new Set())
 
 // Initialize timer with 0 seconds (will be updated once test loads)
 const timer = useTimer(0, () => {
@@ -92,6 +104,47 @@ async function handleFinishTest(status: AttemptStatus = ATTEMPT_STATUSES.COMPLET
   // clearTest() ensures isActive becomes false so the router guard won't block.
   testStore.clearTest()
   router.push('/student/results')
+}
+
+// Complaint functions
+function openComplaintModal() {
+  complaintText.value = ''
+  complaintError.value = ''
+  complaintSuccess.value = ''
+  showComplaintModal.value = true
+}
+
+async function handleSubmitComplaint() {
+  if (!currentQuestion.value || !testStore.activeTest || !authStore.user) return
+
+  complaintError.value = ''
+  complaintSuccess.value = ''
+  isSubmittingComplaint.value = true
+
+  try {
+    const result = await submitQuestionComplaint({
+      user_id: authStore.user.id,
+      test_id: testStore.activeTest.test_id,
+      question_id: currentQuestion.value.id,
+      attempt_id: testStore.activeTest.attempt_id,
+      complaint_text: complaintText.value,
+    })
+
+    if (result.success) {
+      complaintSuccess.value = 'Shikoyat muvaffaqiyatli yuborildi'
+      complainedQuestionIds.value.add(currentQuestion.value.id)
+      setTimeout(() => {
+        showComplaintModal.value = false
+        complaintSuccess.value = ''
+      }, 1500)
+    } else {
+      complaintError.value = result.error ?? 'Shikoyat yuborishda xatolik'
+    }
+  } catch {
+    complaintError.value = 'Shikoyat yuborishda xatolik yuz berdi'
+  } finally {
+    isSubmittingComplaint.value = false
+  }
 }
 
 // Update timer remaining in store periodically
@@ -271,9 +324,25 @@ onUnmounted(() => {
           <div class="rounded-xl border border-border bg-card p-6 lg:p-8 shadow-sm">
             <!-- Question Header -->
             <div class="mb-6">
-              <span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium mb-4">
-                Savol {{ currentIndex + 1 }}
-              </span>
+              <div class="flex items-center justify-between mb-4">
+                <span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                  Savol {{ currentIndex + 1 }}
+                </span>
+                <button
+                  @click="openComplaintModal"
+                  :disabled="complainedQuestionIds.has(currentQuestion.id)"
+                  :class="[
+                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                    complainedQuestionIds.has(currentQuestion.id)
+                      ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                      : 'bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20'
+                  ]"
+                  :title="complainedQuestionIds.has(currentQuestion.id) ? 'Shikoyat yuborilgan' : 'Shikoyat bildirish'"
+                >
+                  <Flag class="w-3.5 h-3.5" />
+                  {{ complainedQuestionIds.has(currentQuestion.id) ? 'Yuborilgan' : 'Shikoyat' }}
+                </button>
+              </div>
               <!-- Question image (optional) -->
               <div v-if="currentQuestion.image_url" class="mb-4">
                 <img
@@ -420,6 +489,103 @@ onUnmounted(() => {
               >
                 <Loader2 v-if="testStore.isFinishing" class="w-4 h-4 animate-spin mx-auto" />
                 <span v-else>Yakunlash</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Complaint Modal -->
+    <Teleport to="body">
+      <Transition
+        enter-active-class="transition-opacity duration-200"
+        leave-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        leave-to-class="opacity-0"
+      >
+        <div
+          v-if="showComplaintModal"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+          @click.self="showComplaintModal = false"
+        >
+          <div class="w-full max-w-md bg-card rounded-xl shadow-xl border border-border animate-scale-in">
+            <!-- Header -->
+            <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+              <div class="flex items-center gap-2">
+                <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-orange-500/10">
+                  <Flag class="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                </div>
+                <h3 class="text-lg font-semibold text-foreground">Shikoyat bildirish</h3>
+              </div>
+              <button
+                @click="showComplaintModal = false"
+                class="inline-flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+
+            <!-- Body -->
+            <div class="px-6 py-5 space-y-4">
+              <div class="text-sm text-muted-foreground">
+                <span class="font-medium text-foreground">Savol {{ currentIndex + 1 }}:</span>
+                {{ currentQuestion?.question_text?.slice(0, 100) }}{{ (currentQuestion?.question_text?.length ?? 0) > 100 ? '...' : '' }}
+              </div>
+
+              <!-- Error -->
+              <div
+                v-if="complaintError"
+                class="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm"
+              >
+                <AlertTriangle class="w-4 h-4 shrink-0" />
+                {{ complaintError }}
+              </div>
+
+              <!-- Success -->
+              <div
+                v-if="complaintSuccess"
+                class="flex items-center gap-2 p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-600 dark:text-green-400 text-sm"
+              >
+                <CheckCircle2 class="w-4 h-4 shrink-0" />
+                {{ complaintSuccess }}
+              </div>
+
+              <!-- Complaint text -->
+              <div v-if="!complaintSuccess" class="space-y-1.5">
+                <label class="text-sm font-medium text-foreground">
+                  Shikoyat matni <span class="text-red-500">*</span>
+                </label>
+                <textarea
+                  v-model="complaintText"
+                  placeholder="Savolda qanday xatolik borligini batafsil yozing..."
+                  rows="4"
+                  maxlength="2000"
+                  class="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:ring-offset-background min-h-[100px] resize-y transition-colors"
+                  :disabled="isSubmittingComplaint"
+                />
+                <p class="text-xs text-muted-foreground text-right">
+                  {{ complaintText.length }} / 2000
+                </p>
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div v-if="!complaintSuccess" class="flex items-center justify-end gap-3 px-6 py-4 border-t border-border">
+              <button
+                @click="showComplaintModal = false"
+                class="inline-flex items-center rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+              >
+                Bekor qilish
+              </button>
+              <button
+                @click="handleSubmitComplaint"
+                :disabled="isSubmittingComplaint || complaintText.trim().length < 10"
+                class="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+              >
+                <Loader2 v-if="isSubmittingComplaint" class="w-4 h-4 animate-spin" />
+                <Send v-else class="w-4 h-4" />
+                Yuborish
               </button>
             </div>
           </div>

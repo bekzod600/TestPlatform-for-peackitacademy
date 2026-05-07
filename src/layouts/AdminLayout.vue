@@ -19,6 +19,7 @@ import {
   Moon,
   BookOpen,
   FolderOpen,
+  Flag,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -41,6 +42,7 @@ const navItems = [
   { path: '/admin/tests', label: 'Testlar', icon: ClipboardList },
   { path: '/admin/assignments', label: 'Test tayinlash', icon: CalendarCheck },
   { path: '/admin/results', label: 'Natijalar', icon: BarChart3 },
+  { path: '/admin/complaints', label: 'Shikoyatlar', icon: Flag },
   { path: '/admin/audit-log', label: 'Audit Log', icon: ScrollText },
 ]
 
@@ -60,7 +62,7 @@ function logout() {
 </script>
 
 <template>
-  <div class="min-[100svh] bg-background">
+  <div class="min-h-[100svh] bg-background">
     <!-- Mobile overlay -->
     <Transition
       enter-active-class="transition-opacity duration-300"

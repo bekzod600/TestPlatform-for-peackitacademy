@@ -207,6 +207,25 @@ export const APP = {
 } as const
 
 // -------------------------------------------------------------
+// Question Complaint Statuses
+// -------------------------------------------------------------
+export const COMPLAINT_STATUSES = {
+  PENDING: 'pending',
+  REVIEWED: 'reviewed',
+  RESOLVED: 'resolved',
+  REJECTED: 'rejected',
+} as const
+
+export type ComplaintStatus = (typeof COMPLAINT_STATUSES)[keyof typeof COMPLAINT_STATUSES]
+
+export const COMPLAINT_STATUS_LABELS: Record<ComplaintStatus, string> = {
+  [COMPLAINT_STATUSES.PENDING]: 'Kutilmoqda',
+  [COMPLAINT_STATUSES.REVIEWED]: 'Ko\'rib chiqilgan',
+  [COMPLAINT_STATUSES.RESOLVED]: 'Hal qilingan',
+  [COMPLAINT_STATUSES.REJECTED]: 'Rad etilgan',
+}
+
+// -------------------------------------------------------------
 // Audit Log Actions (for entity_type + action combos)
 // -------------------------------------------------------------
 export const AUDIT_ACTIONS = {
@@ -233,6 +252,7 @@ export const ENTITY_TYPES = {
   TEST_ASSIGNMENT: 'test_assignment',
   TEST_ATTEMPT: 'test_attempt',
   SESSION: 'session',
+  QUESTION_COMPLAINT: 'question_complaint',
 } as const
 
 export type EntityType = (typeof ENTITY_TYPES)[keyof typeof ENTITY_TYPES]

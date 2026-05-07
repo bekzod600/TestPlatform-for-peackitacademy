@@ -318,6 +318,38 @@ export interface AuditLog extends CreatedEntity {
 
 export type AuditLogInsert = Omit<AuditLog, 'id' | 'created_at'>
 
+// -------------------------------------------------------------
+// 13. Question Complaints
+// -------------------------------------------------------------
+export interface QuestionComplaint extends CreatedEntity {
+  user_id: number
+  test_id: number
+  question_id: number
+  attempt_id: number
+  complaint_text: string
+  status: 'pending' | 'reviewed' | 'resolved' | 'rejected'
+  admin_note: string | null
+  reviewed_by: number | null
+  reviewed_at: string | null
+}
+
+/** Complaint with related user, test, question, and reviewer info */
+export interface QuestionComplaintWithDetails extends QuestionComplaint {
+  user: SafeUser | null
+  test: Test | null
+  question: QuestionWithOptions | null
+  reviewer: SafeUser | null
+}
+
+export type QuestionComplaintInsert = Pick<
+  QuestionComplaint,
+  'user_id' | 'test_id' | 'question_id' | 'attempt_id' | 'complaint_text'
+>
+
+export type QuestionComplaintUpdate = Partial<
+  Pick<QuestionComplaint, 'status' | 'admin_note' | 'reviewed_by' | 'reviewed_at'>
+>
+
 // =============================================================
 // API Response Types
 // =============================================================
