@@ -1168,6 +1168,59 @@ export async function fetchComplaints(
 }
 
 /**
+ * Fetch paginated complaints for students in the teacher's groups.
+ * Two-step: find group student IDs, then filter complaints.
+ */
+export async function fetchComplaintsByTeacher(
+  teacherId: number,
+  filters: ComplaintListFilters = {},
+): Promise<PaginatedResponse<QuestionComplaintWithDetails>> {
+  const emptyResult = (ps: number): PaginatedResponse<QuestionComplaintWithDetails> => ({
+    data: [],
+    error: null,
+    success: true,
+    pagination: { page: 1, page_size: ps, total_count: 0, total_pages: 0, has_next: false, has_previous: false },
+  })
+
+  // Step 1: Get group IDs belonging to this teacher
+  const { data: groups, error: gErr } = await supabase
+    .from('user_groups')
+    .select('id')
+    .eq('teacher_id', teacherId)
+
+  if (gErr) return { ...emptyResult(filters.page_size ?? 20), error: gErr.message, success: false }
+  const groupIds = (groups ?? []).map((g: { id: number }) => g.id)
+  if (groupIds.length === 0) return emptyResult(filters.page_size ?? 20)
+
+  // Step 2: Get student IDs in those groups
+  const { data: students, error: sErr } = await supabase
+    .from('users')
+    .select('id')
+    .in('user_group_id', groupIds)
+    .eq('role', 'student')
+
+  if (sErr) return { ...emptyResult(filters.page_size ?? 20), error: sErr.message, success: false }
+  const studentIds = (students ?? []).map((s: { id: number }) => s.id)
+  if (studentIds.length === 0) return emptyResult(filters.page_size ?? 20)
+
+  // Step 3: Fetch complaints filtered to those student IDs
+  return fetchPaginated<QuestionComplaintWithDetails>(
+    'question_complaints',
+    { ...filters, sort_by: filters.sort_by ?? 'created_at', sort_order: filters.sort_order ?? 'desc' },
+    '*, user:users!question_complaints_user_id_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at), test:tests(*), question:questions(*, answer_options(*)), reviewer:users!question_complaints_reviewed_by_fkey(id, full_name, username, role, user_group_id, is_active, created_at, updated_at, last_login_at)',
+    (qb) => {
+      let q = qb.in('user_id', studentIds)
+      if (filters.status) q = q.eq('status', filters.status)
+      if (filters.user_id !== undefined) q = q.eq('user_id', filters.user_id)
+      if (filters.test_id !== undefined) q = q.eq('test_id', filters.test_id)
+      if (filters.question_id !== undefined) q = q.eq('question_id', filters.question_id)
+      if (filters.search) q = q.ilike('complaint_text', `%${sanitizeSearch(filters.search)}%`)
+      return q
+    },
+  )
+}
+
+/**
  * Update a complaint status and admin note.
  */
 export async function updateComplaint(
@@ -1211,4 +1264,139 @@ export async function deleteComplaint(
     await logAudit({ user_id: actorId, action: 'delete', entity_type: 'question_complaint', entity_id: id })
   }
   return result
+}
+
+// =============================================================
+// BULK OPERATIONS
+// =============================================================
+
+/**
+ * Bulk delete rows from a table by IDs.
+ * Uses Supabase `.in('id', ids)` → PostgreSQL `WHERE id IN (...)`.
+ */
+export async function bulkDelete(
+  table: string,
+  ids: number[],
+  entityType: string,
+  actorId?: number | null,
+): Promise<ApiResponse<{ deleted_count: number }>> {
+  if (ids.length === 0) {
+    return { data: { deleted_count: 0 }, error: null, success: true }
+  }
+
+  const { error } = await supabase.from(table).delete().in('id', ids)
+
+  if (error) {
+    return { data: null, error: error.message, success: false }
+  }
+
+  await logAudit({
+    user_id: actorId,
+    action: 'delete',
+    entity_type: entityType,
+    new_data: { bulk_ids: ids, count: ids.length },
+  })
+
+  return { data: { deleted_count: ids.length }, error: null, success: true }
+}
+
+/**
+ * Bulk update `is_active` status for rows in a table.
+ */
+export async function bulkToggleStatus(
+  table: string,
+  ids: number[],
+  isActive: boolean,
+  entityType: string,
+  actorId?: number | null,
+): Promise<ApiResponse<{ updated_count: number }>> {
+  if (ids.length === 0) {
+    return { data: { updated_count: 0 }, error: null, success: true }
+  }
+
+  const { error } = await supabase.from(table).update({ is_active: isActive }).in('id', ids)
+
+  if (error) {
+    return { data: null, error: error.message, success: false }
+  }
+
+  await logAudit({
+    user_id: actorId,
+    action: 'update',
+    entity_type: entityType,
+    new_data: { bulk_ids: ids, count: ids.length, is_active: isActive },
+  })
+
+  return { data: { updated_count: ids.length }, error: null, success: true }
+}
+
+// =============================================================
+// PER-QUESTION ANALYTICS
+// =============================================================
+
+export interface QuestionAnalytics {
+  question_id: number
+  question_text: string
+  total_answered: number
+  correct_count: number
+  incorrect_count: number
+  correct_rate: number
+}
+
+/**
+ * Fetch per-question analytics for a given test.
+ * Queries test_answers for attempts belonging to the test,
+ * then aggregates correct/incorrect rates in JS.
+ */
+export async function fetchQuestionAnalytics(
+  testId: number,
+): Promise<ApiResponse<QuestionAnalytics[]>> {
+  // 1. Get attempt IDs for this test
+  const { data: attempts, error: attErr } = await supabase
+    .from('test_attempts')
+    .select('id')
+    .eq('test_id', testId)
+    .in('status', ['completed', 'timed_out', 'violation'])
+
+  if (attErr) return { data: null, error: attErr.message, success: false }
+  if (!attempts || attempts.length === 0) return { data: [], error: null, success: true }
+
+  const attemptIds = attempts.map((a) => a.id)
+
+  // 2. Fetch all answers for these attempts
+  const { data: answers, error: ansErr } = await supabase
+    .from('test_answers')
+    .select('question_id, is_correct, question:questions(question_text)')
+    .in('attempt_id', attemptIds)
+
+  if (ansErr) return { data: null, error: ansErr.message, success: false }
+
+  // 3. Aggregate
+  const map = new Map<number, QuestionAnalytics>()
+  for (const row of answers ?? []) {
+    if (!map.has(row.question_id)) {
+      map.set(row.question_id, {
+        question_id: row.question_id,
+        question_text: (row.question as unknown as { question_text: string })?.question_text ?? '',
+        total_answered: 0,
+        correct_count: 0,
+        incorrect_count: 0,
+        correct_rate: 0,
+      })
+    }
+    const entry = map.get(row.question_id)!
+    entry.total_answered++
+    if (row.is_correct === true) entry.correct_count++
+    else entry.incorrect_count++
+  }
+
+  const analytics = Array.from(map.values())
+  for (const a of analytics) {
+    a.correct_rate = a.total_answered > 0 ? Math.round((a.correct_count / a.total_answered) * 100) : 0
+  }
+
+  // Sort by correct_rate ascending (hardest first)
+  analytics.sort((a, b) => a.correct_rate - b.correct_rate)
+
+  return { data: analytics, error: null, success: true }
 }

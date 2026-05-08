@@ -433,6 +433,7 @@ export interface ActiveTestState {
   started_at: string
   time_remaining_seconds: number
   violation_count: number
+  flagged_questions: number[]
 }
 
 /** Result computed after finishing a test (from DB function) */

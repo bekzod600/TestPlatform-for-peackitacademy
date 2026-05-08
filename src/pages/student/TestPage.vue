@@ -14,11 +14,14 @@ import {
   ClipboardList,
   Flag,
   X,
+  Bookmark,
+  WifiOff,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useStudentTestStore } from '@/stores/student/test'
 import { useTimer } from '@/composables/useTimer'
 import { useTestSecurity } from '@/composables/useTestSecurity'
+import { useConnectionStatus } from '@/composables/useConnectionStatus'
 import { ANTI_CHEAT, ATTEMPT_STATUSES } from '@/lib/constants'
 import type { AttemptStatus } from '@/lib/constants'
 import { submitQuestionComplaint } from '@/api/student.api'
@@ -46,6 +49,23 @@ const complaintSuccess = ref('')
 const complainedQuestionIds = ref<Set<number>>(new Set())
 /** Total complaint count for this test (max 2) */
 const totalComplaintCount = ref(0)
+
+// Connection status
+const { isOnline } = useConnectionStatus()
+
+// Auto-save indicator
+const showSavedIndicator = ref(false)
+let savedTimeout: ReturnType<typeof setTimeout> | null = null
+
+watch(() => testStore.isSubmitting, (newVal, oldVal) => {
+  if (oldVal === true && newVal === false) {
+    showSavedIndicator.value = true
+    if (savedTimeout) clearTimeout(savedTimeout)
+    savedTimeout = setTimeout(() => {
+      showSavedIndicator.value = false
+    }, 2000)
+  }
+})
 
 // Initialize timer with 0 seconds (will be updated once test loads)
 const timer = useTimer(0, () => {
@@ -161,6 +181,44 @@ async function handleSubmitComplaint() {
   }
 }
 
+// Keyboard shortcuts
+const isAnyModalOpen = computed(() =>
+  showFinishModal.value || showViolationModal.value || showComplaintModal.value
+)
+
+function handleKeyboardShortcuts(e: KeyboardEvent) {
+  if (isAnyModalOpen.value) return
+  const tag = (e.target as HTMLElement)?.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+  if (e.key === 'ArrowLeft' || e.key === 'p' || e.key === 'P') {
+    e.preventDefault()
+    previousQuestion()
+    return
+  }
+
+  if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
+    e.preventDefault()
+    nextQuestion()
+    return
+  }
+
+  if (currentQuestion.value) {
+    const num = parseInt(e.key)
+    if (num >= 1 && num <= currentQuestion.value.answer_options.length) {
+      e.preventDefault()
+      const option = currentQuestion.value.answer_options[num - 1]
+      selectAnswer(currentQuestion.value.id, option.id)
+      return
+    }
+  }
+
+  if ((e.key === 'f' || e.key === 'F') && currentQuestion.value) {
+    e.preventDefault()
+    testStore.toggleFlag(currentQuestion.value.id)
+  }
+}
+
 // Update timer remaining in store periodically
 watch(() => timer.timeRemaining.value, (val) => {
   if (testStore.activeTest) {
@@ -248,11 +306,16 @@ async function initTest() {
   }
 }
 
-onMounted(initTest)
+onMounted(() => {
+  initTest()
+  document.addEventListener('keydown', handleKeyboardShortcuts)
+})
 
 // Cleanup on unmount
 onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  document.removeEventListener('keydown', handleKeyboardShortcuts)
+  if (savedTimeout) clearTimeout(savedTimeout)
 })
 </script>
 
@@ -296,8 +359,19 @@ onUnmounted(() => {
           {{ timer.formattedTime.value }}
         </div>
 
-        <!-- Answered Counter -->
-        <div class="flex items-center gap-2 text-sm">
+        <!-- Auto-save indicator + Answered Counter -->
+        <div class="flex items-center gap-3 text-sm">
+          <!-- Auto-save status -->
+          <div v-if="testStore.isSubmitting || showSavedIndicator" class="hidden sm:flex items-center gap-1.5 text-xs">
+            <template v-if="testStore.isSubmitting">
+              <Loader2 class="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+              <span class="text-muted-foreground">Saqlanmoqda...</span>
+            </template>
+            <template v-else>
+              <CheckCircle2 class="w-3.5 h-3.5 text-green-500" />
+              <span class="text-green-600 dark:text-green-400">Saqlangan</span>
+            </template>
+          </div>
           <div class="hidden sm:flex items-center gap-1.5 text-muted-foreground">
             <CheckCircle2 class="w-4 h-4" />
             <span class="font-medium">{{ answeredCount }}/{{ totalQuestions }}</span>
@@ -314,6 +388,17 @@ onUnmounted(() => {
       </div>
     </header>
 
+    <!-- Connection lost banner -->
+    <div
+      v-if="!isOnline"
+      class="flex-shrink-0 bg-destructive/10 border-b border-destructive/20 px-4 py-2"
+    >
+      <div class="max-w-5xl mx-auto flex items-center gap-2 text-sm text-destructive">
+        <WifiOff class="w-4 h-4 shrink-0" />
+        <span>Internet aloqasi yo'q. Javoblar mahalliy saqlanmoqda.</span>
+      </div>
+    </div>
+
     <!-- Main Content (Scrollable) -->
     <div class="flex-1 overflow-y-auto">
       <div class="max-w-5xl mx-auto px-4 lg:px-6 py-6 space-y-6">
@@ -323,23 +408,61 @@ onUnmounted(() => {
             <!-- Question Header -->
             <div class="mb-6">
               <div class="flex items-center justify-between mb-4">
-                <span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
-                  Savol {{ currentIndex + 1 }}
-                </span>
-                <button
-                  @click="openComplaintModal"
-                  :disabled="complainedQuestionIds.has(currentQuestion.id) || totalComplaintCount >= 2"
-                  :class="[
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
-                    complainedQuestionIds.has(currentQuestion.id) || totalComplaintCount >= 2
-                      ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                      : 'bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20'
-                  ]"
-                  :title="totalComplaintCount >= 2 ? 'Shikoyat limiti tugadi (2/2)' : complainedQuestionIds.has(currentQuestion.id) ? 'Shikoyat yuborilgan' : 'Shikoyat bildirish'"
-                >
-                  <Flag class="w-3.5 h-3.5" />
-                  {{ complainedQuestionIds.has(currentQuestion.id) ? 'Yuborilgan' : totalComplaintCount >= 2 ? 'Limit (2/2)' : 'Shikoyat' }}
-                </button>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="inline-flex items-center px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                    Savol {{ currentIndex + 1 }}
+                  </span>
+                  <!-- Difficulty badge -->
+                  <span
+                    v-if="currentQuestion.difficulty"
+                    :class="[
+                      'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium',
+                      currentQuestion.difficulty === 'easy' && 'bg-green-500/10 text-green-600 dark:text-green-400',
+                      currentQuestion.difficulty === 'medium' && 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400',
+                      currentQuestion.difficulty === 'hard' && 'bg-red-500/10 text-red-600 dark:text-red-400',
+                    ]"
+                  >
+                    {{ currentQuestion.difficulty === 'easy' ? 'Oson' : currentQuestion.difficulty === 'medium' ? "O'rta" : 'Qiyin' }}
+                  </span>
+                  <!-- Points badge -->
+                  <span
+                    v-if="currentQuestion.points"
+                    class="inline-flex items-center px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-medium"
+                  >
+                    {{ currentQuestion.points }} ball
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <!-- Bookmark button -->
+                  <button
+                    @click="testStore.toggleFlag(currentQuestion.id)"
+                    :class="[
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                      testStore.isQuestionFlagged(currentQuestion.id)
+                        ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+                        : 'bg-muted text-muted-foreground hover:bg-accent'
+                    ]"
+                    title="Belgilash"
+                  >
+                    <Bookmark class="w-3.5 h-3.5" :fill="testStore.isQuestionFlagged(currentQuestion.id) ? 'currentColor' : 'none'" />
+                    {{ testStore.isQuestionFlagged(currentQuestion.id) ? 'Belgilangan' : 'Belgilash' }}
+                  </button>
+                  <!-- Complaint button -->
+                  <button
+                    @click="openComplaintModal"
+                    :disabled="complainedQuestionIds.has(currentQuestion.id) || totalComplaintCount >= 2"
+                    :class="[
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors',
+                      complainedQuestionIds.has(currentQuestion.id) || totalComplaintCount >= 2
+                        ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                        : 'bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20'
+                    ]"
+                    :title="totalComplaintCount >= 2 ? 'Shikoyat limiti tugadi (2/2)' : complainedQuestionIds.has(currentQuestion.id) ? 'Shikoyat yuborilgan' : 'Shikoyat bildirish'"
+                  >
+                    <Flag class="w-3.5 h-3.5" />
+                    {{ complainedQuestionIds.has(currentQuestion.id) ? 'Yuborilgan' : totalComplaintCount >= 2 ? 'Limit (2/2)' : 'Shikoyat' }}
+                  </button>
+                </div>
               </div>
               <!-- Question image (optional) -->
               <div v-if="currentQuestion.image_url" class="mb-4">
@@ -389,6 +512,9 @@ onUnmounted(() => {
           <p class="text-xs font-medium text-muted-foreground mb-4 flex items-center gap-2">
             <Eye class="w-4 h-4" />
             Savollar navigatsiyasi
+            <span v-if="testStore.flaggedCount > 0" class="text-amber-600 dark:text-amber-400">
+              ({{ testStore.flaggedCount }} ta belgilangan)
+            </span>
           </p>
           <div class="flex flex-wrap gap-2">
             <button
@@ -396,7 +522,7 @@ onUnmounted(() => {
               :key="q.id"
               @click="goToQuestion(idx)"
               :class="[
-                'w-10 h-10 rounded-lg text-sm font-medium transition-all',
+                'relative w-10 h-10 rounded-lg text-sm font-medium transition-all',
                 idx === currentIndex && 'ring-2 ring-primary ring-offset-2 ring-offset-background scale-110',
                 selectedAnswers[q.id] !== undefined && selectedAnswers[q.id] !== null
                   ? 'bg-primary text-primary-foreground shadow-sm'
@@ -404,8 +530,19 @@ onUnmounted(() => {
               ]"
             >
               {{ idx + 1 }}
+              <!-- Flag indicator dot -->
+              <span
+                v-if="testStore.isQuestionFlagged(q.id)"
+                class="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-amber-500 border-2 border-background"
+              />
             </button>
           </div>
+          <!-- Keyboard hints (desktop only) -->
+          <p class="hidden lg:flex items-center gap-3 text-[10px] text-muted-foreground/60 mt-3">
+            <span><kbd class="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">&larr;</kbd> <kbd class="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">&rarr;</kbd> navigatsiya</span>
+            <span><kbd class="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">1</kbd>-<kbd class="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">4</kbd> javob tanlash</span>
+            <span><kbd class="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px]">F</kbd> belgilash</span>
+          </p>
         </div>
       </div>
     </div>

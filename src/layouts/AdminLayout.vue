@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   LayoutDashboard,
@@ -23,6 +23,7 @@ import {
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
+import { fetchComplaints } from '@/api/admin.api'
 
 const router = useRouter()
 const route = useRoute()
@@ -31,6 +32,28 @@ const themeStore = useThemeStore()
 
 const sidebarOpen = ref(false)
 const sidebarCollapsed = ref(false)
+const pendingComplaintsCount = ref(0)
+let badgeInterval: ReturnType<typeof setInterval> | null = null
+
+async function loadPendingComplaintsCount() {
+  try {
+    const result = await fetchComplaints({ status: 'pending', page: 1, page_size: 1 })
+    if (result.success) {
+      pendingComplaintsCount.value = result.pagination.total_count
+    }
+  } catch {
+    // Silently fail — badge is non-critical
+  }
+}
+
+onMounted(() => {
+  loadPendingComplaintsCount()
+  badgeInterval = setInterval(loadPendingComplaintsCount, 60000)
+})
+
+onUnmounted(() => {
+  if (badgeInterval) clearInterval(badgeInterval)
+})
 
 const navItems = [
   { path: '/admin', label: 'Dashboard', icon: LayoutDashboard, exact: true },
@@ -125,7 +148,7 @@ function logout() {
           :key="item.path"
           @click="navigate(item.path)"
           :class="[
-            'flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-colors',
+            'relative flex items-center gap-3 w-full rounded-lg text-sm font-medium transition-colors',
             sidebarCollapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5',
             isActive(item)
               ? 'bg-sidebar-primary/10 text-sidebar-primary'
@@ -134,7 +157,19 @@ function logout() {
           :title="sidebarCollapsed ? item.label : undefined"
         >
           <component :is="item.icon" class="w-5 h-5 shrink-0" />
-          <span v-if="!sidebarCollapsed" class="whitespace-nowrap">{{ item.label }}</span>
+          <span v-if="!sidebarCollapsed" class="whitespace-nowrap flex-1">{{ item.label }}</span>
+          <!-- Pending complaints badge -->
+          <span
+            v-if="item.path === '/admin/complaints' && pendingComplaintsCount > 0 && !sidebarCollapsed"
+            class="inline-flex items-center justify-center min-w-5 h-5 px-1.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold"
+          >
+            {{ pendingComplaintsCount > 99 ? '99+' : pendingComplaintsCount }}
+          </span>
+          <!-- Collapsed badge dot -->
+          <span
+            v-if="item.path === '/admin/complaints' && pendingComplaintsCount > 0 && sidebarCollapsed"
+            class="absolute top-1 right-1 w-2.5 h-2.5 rounded-full bg-destructive"
+          />
         </button>
       </nav>
 

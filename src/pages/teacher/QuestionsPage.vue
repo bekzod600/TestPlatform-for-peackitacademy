@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   Plus,
   Search,
@@ -55,6 +56,7 @@ import type {
 // ---------------------------------------------------------------------------
 // Composables & stores
 // ---------------------------------------------------------------------------
+const route = useRoute()
 const auth = useAuthStore()
 const { toast } = useToast()
 
@@ -758,6 +760,11 @@ async function handleFileImport(event: Event) {
 // ---------------------------------------------------------------------------
 onMounted(async () => {
   await loadReferenceData()
+  // Pre-fill search from query parameter (e.g., from complaints page)
+  if (route.query.search) {
+    searchInput.value = String(route.query.search)
+    filters.search = String(route.query.search)
+  }
   await loadQuestions()
 })
 </script>

@@ -16,11 +16,20 @@ import {
   createCategory,
   updateCategory,
   deleteCategory,
+  bulkDelete,
 } from '@/api/admin.api'
 import { useToast } from '@/components/ui/toast/useToast'
+import BulkActionBar from '@/components/BulkActionBar.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { useBulkSelection } from '@/composables/useBulkSelection'
 import type { CategoryWithSubject, Subject, CategoryInsert } from '@/types'
 
 const { toast } = useToast()
+
+const { selectedIds, selectedCount, hasSelection, toggleItem, isSelected, deselectAll } = useBulkSelection<CategoryWithSubject>()
+
+const isBulkProcessing = ref(false)
+const isBulkDeleteModalOpen = ref(false)
 
 const isLoading = ref(true)
 const categories = ref<CategoryWithSubject[]>([])
@@ -143,6 +152,25 @@ async function handleDelete() {
   }
 }
 
+async function confirmBulkDelete() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkDelete('categories', [...selectedIds.value], 'category')
+    if (result.success) {
+      toast({ title: `${result.data!.deleted_count} ta kategoriya o'chirildi`, variant: 'success' })
+      deselectAll()
+      await loadData()
+    } else {
+      toast({ title: 'Xatolik', description: result.error ?? "Ommaviy o'chirishda xatolik", variant: 'destructive' })
+    }
+  } catch {
+    toast({ title: 'Xatolik', description: "Ommaviy o'chirishda xatolik", variant: 'destructive' })
+  } finally {
+    isBulkProcessing.value = false
+    isBulkDeleteModalOpen.value = false
+  }
+}
+
 const filtered = computed(() => {
   let result = categories.value
   if (subjectFilter.value !== '') {
@@ -201,6 +229,16 @@ onMounted(loadData)
       </select>
     </div>
 
+    <BulkActionBar
+      v-if="hasSelection"
+      :selected-count="selectedCount"
+      entity-label="kategoriya"
+      :show-status-toggle="false"
+      :is-processing="isBulkProcessing"
+      @bulk-delete="isBulkDeleteModalOpen = true"
+      @clear-selection="deselectAll"
+    />
+
     <!-- Loading -->
     <div v-if="isLoading" class="space-y-3">
       <div v-for="i in 5" :key="i" class="h-16 bg-muted animate-pulse rounded-xl" />
@@ -227,9 +265,16 @@ onMounted(loadData)
       <div
         v-for="cat in filtered"
         :key="cat.id"
-        class="flex items-center justify-between p-4 rounded-xl border border-border bg-card hover:shadow-sm transition-shadow"
+        :class="['flex items-center justify-between p-4 rounded-xl border bg-card hover:shadow-sm transition-shadow', isSelected(cat.id) ? 'border-primary/30 bg-primary/5' : 'border-border']"
       >
         <div class="flex items-center gap-3 min-w-0">
+          <input
+            type="checkbox"
+            :checked="isSelected(cat.id)"
+            class="h-4 w-4 rounded border-input text-primary focus:ring-ring shrink-0"
+            @change="toggleItem(cat.id)"
+            @click.stop
+          />
           <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-500/10 shrink-0">
             <FolderOpen class="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
           </div>
@@ -367,47 +412,28 @@ onMounted(loadData)
       </Transition>
     </Teleport>
 
-    <!-- Delete Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition-all duration-200"
-        leave-active-class="transition-all duration-200"
-        enter-from-class="opacity-0"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showDeleteModal"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          @click.self="showDeleteModal = false"
-        >
-          <div class="w-full max-w-sm bg-background rounded-xl shadow-xl border border-border p-6">
-            <div class="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 mx-auto mb-4">
-              <Trash2 class="w-6 h-6 text-red-600 dark:text-red-400" />
-            </div>
-            <h3 class="text-lg font-semibold text-foreground text-center mb-1">Kategoriyani o'chirish</h3>
-            <p class="text-sm text-muted-foreground text-center mb-5">
-              <span class="font-medium text-foreground">{{ deletingName }}</span> kategoriyasini o'chirishni
-              xohlaysizmi? Bu amalni qaytarib bo'lmaydi.
-            </p>
-            <div class="flex gap-3">
-              <button
-                @click="showDeleteModal = false"
-                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border border-border text-foreground hover:bg-accent transition-colors"
-              >
-                Bekor qilish
-              </button>
-              <button
-                @click="handleDelete"
-                :disabled="isDeleting"
-                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                <Loader2 v-if="isDeleting" class="w-4 h-4 animate-spin mx-auto" />
-                <span v-else>O'chirish</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <ConfirmDialog
+      :open="showDeleteModal"
+      title="Kategoriyani o'chirish"
+      :description="`${deletingName} kategoriyasini o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.`"
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isDeleting"
+      @confirm="handleDelete"
+      @cancel="showDeleteModal = false"
+      @update:open="(v: boolean) => { if (!v) showDeleteModal = false }"
+    />
+
+    <ConfirmDialog
+      :open="isBulkDeleteModalOpen"
+      title="Ommaviy o'chirish"
+      :description="`${selectedCount} ta kategoriyani o'chirishni xohlaysizmi? Bu amalni ortga qaytarib bo'lmaydi.`"
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isBulkProcessing"
+      @confirm="confirmBulkDelete"
+      @cancel="isBulkDeleteModalOpen = false"
+      @update:open="(v: boolean) => { if (!v) isBulkDeleteModalOpen = false }"
+    />
   </div>
 </template>

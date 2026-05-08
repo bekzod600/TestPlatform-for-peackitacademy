@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   Plus,
   Search,
@@ -31,7 +32,12 @@ import {
   updateOption,
   deleteOption,
   syncQuestionTests,
+  bulkDelete,
+  bulkToggleStatus,
 } from '@/api/admin.api'
+import BulkActionBar from '@/components/BulkActionBar.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { useBulkSelection } from '@/composables/useBulkSelection'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/components/ui/toast/useToast'
 import {
@@ -57,9 +63,11 @@ import type {
 // ---------------------------------------------------------------------------
 // Composables & stores
 // ---------------------------------------------------------------------------
+const route = useRoute()
 const auth = useAuthStore()
 const { toast } = useToast()
 const { uploadImage, deleteImage, replaceImage, isUploading: isImageUploading, uploadError: imageUploadError } = useImageUpload()
+const { selectedIds, selectedCount, hasSelection, toggleItem, toggleAll, isSelected, isAllSelected, isIndeterminate, deselectAll } = useBulkSelection<QuestionWithDetails>()
 
 // ---------------------------------------------------------------------------
 // Reference data (for selects / filters)
@@ -448,6 +456,8 @@ async function syncAnswerOptions(questionId: number) {
 const isDeleteModalOpen = ref(false)
 const deletingQuestion = ref<QuestionWithDetails | null>(null)
 const isDeleting = ref(false)
+const isBulkProcessing = ref(false)
+const isBulkDeleteModalOpen = ref(false)
 
 function openDeleteModal(q: QuestionWithDetails) {
   deletingQuestion.value = q
@@ -480,6 +490,60 @@ async function confirmDelete() {
     toast({ title: 'Xatolik', description: "O'chirishda xatolik", variant: 'destructive' })
   } finally {
     isDeleting.value = false
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Bulk Operations
+// ---------------------------------------------------------------------------
+async function confirmBulkDelete() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkDelete('questions', [...selectedIds.value], 'question', auth.user?.id ?? null)
+    if (result.success) {
+      toast({ title: `${result.data!.deleted_count} ta savol o'chirildi`, variant: 'success' })
+      deselectAll()
+      await loadQuestions()
+    } else {
+      toast({ title: 'Xatolik', description: result.error ?? "Ommaviy o'chirishda xatolik", variant: 'destructive' })
+    }
+  } catch {
+    toast({ title: 'Xatolik', description: "Ommaviy o'chirishda xatolik", variant: 'destructive' })
+  } finally {
+    isBulkProcessing.value = false
+    isBulkDeleteModalOpen.value = false
+  }
+}
+
+async function handleBulkActivate() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkToggleStatus('questions', [...selectedIds.value], true, 'question', auth.user?.id ?? null)
+    if (result.success) {
+      toast({ title: `${result.data!.updated_count} ta savol faollashtirildi`, variant: 'success' })
+      deselectAll()
+      await loadQuestions()
+    } else {
+      toast({ title: 'Xatolik', description: result.error ?? 'Faollashtirishda xatolik', variant: 'destructive' })
+    }
+  } finally {
+    isBulkProcessing.value = false
+  }
+}
+
+async function handleBulkDeactivate() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkToggleStatus('questions', [...selectedIds.value], false, 'question', auth.user?.id ?? null)
+    if (result.success) {
+      toast({ title: `${result.data!.updated_count} ta savol nofaollashtirildi`, variant: 'success' })
+      deselectAll()
+      await loadQuestions()
+    } else {
+      toast({ title: 'Xatolik', description: result.error ?? 'Nofaollashtirishda xatolik', variant: 'destructive' })
+    }
+  } finally {
+    isBulkProcessing.value = false
   }
 }
 
@@ -850,6 +914,11 @@ async function handleFileImport(event: Event) {
 // ---------------------------------------------------------------------------
 onMounted(async () => {
   await loadReferenceData()
+  // Pre-fill search from query parameter (e.g., from complaints page)
+  if (route.query.search) {
+    searchInput.value = String(route.query.search)
+    filters.search = String(route.query.search)
+  }
   await loadQuestions()
 })
 </script>
@@ -955,6 +1024,21 @@ onMounted(async () => {
     </div>
 
     <!-- ================================================================= -->
+    <!-- Bulk Action Bar                                                   -->
+    <!-- ================================================================= -->
+    <BulkActionBar
+      v-if="hasSelection"
+      :selected-count="selectedCount"
+      entity-label="savol"
+      :show-status-toggle="true"
+      :is-processing="isBulkProcessing"
+      @bulk-delete="isBulkDeleteModalOpen = true"
+      @bulk-activate="handleBulkActivate"
+      @bulk-deactivate="handleBulkDeactivate"
+      @clear-selection="deselectAll"
+    />
+
+    <!-- ================================================================= -->
     <!-- Loading skeleton                                                  -->
     <!-- ================================================================= -->
     <div v-if="isLoading" class="space-y-4">
@@ -981,12 +1065,39 @@ onMounted(async () => {
     <!-- Questions list (cards)                                            -->
     <!-- ================================================================= -->
     <div v-else class="space-y-3">
+      <!-- Select all checkbox -->
+      <div class="flex items-center gap-2 px-1">
+        <input
+          type="checkbox"
+          :checked="isAllSelected(questions)"
+          :indeterminate="isIndeterminate(questions)"
+          class="h-4 w-4 rounded border-input text-primary focus:ring-ring cursor-pointer"
+          @change="toggleAll(questions)"
+        />
+        <span class="text-sm text-muted-foreground">Barchasini tanlash</span>
+      </div>
+
       <div
         v-for="q in questions"
         :key="q.id"
-        class="rounded-xl border border-border bg-card p-4 hover:shadow-sm transition-shadow"
+        :class="[
+          'rounded-xl border p-4 hover:shadow-sm transition-shadow',
+          isSelected(q.id)
+            ? 'border-primary/50 bg-primary/5'
+            : 'border-border bg-card',
+        ]"
       >
         <div class="flex items-start justify-between gap-4">
+          <!-- Checkbox -->
+          <div class="flex items-center shrink-0 pt-0.5">
+            <input
+              type="checkbox"
+              :checked="isSelected(q.id)"
+              class="h-4 w-4 rounded border-input text-primary focus:ring-ring cursor-pointer"
+              @change="toggleItem(q.id)"
+            />
+          </div>
+
           <!-- Main content -->
           <div class="flex-1 min-w-0 space-y-2">
             <!-- Question text with optional image thumbnail -->
@@ -1355,49 +1466,34 @@ onMounted(async () => {
     </Teleport>
 
     <!-- ================================================================= -->
-    <!-- Delete confirmation modal                                         -->
+    <!-- Delete confirmation modal (single)                                -->
     <!-- ================================================================= -->
-    <Teleport to="body">
-      <Transition name="fade">
-        <div
-          v-if="isDeleteModalOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        >
-          <Transition name="scale">
-            <div
-              v-if="isDeleteModalOpen"
-              class="relative w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg mx-4"
-            >
-              <h3 class="text-lg font-semibold text-foreground">Savolni o'chirish</h3>
-              <p class="mt-2 text-sm text-muted-foreground">
-                "{{ truncate(deletingQuestion?.question_text ?? '', 80) }}" savolini o'chirishni xohlaysizmi?
-                Bu amalni qaytarib bo'lmaydi.
-              </p>
+    <ConfirmDialog
+      :open="isDeleteModalOpen"
+      title="Savolni o'chirish"
+      :description="`&quot;${truncate(deletingQuestion?.question_text ?? '', 80)}&quot; savolini o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.`"
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isDeleting"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteModal"
+      @update:open="(v: boolean) => { if (!v) closeDeleteModal() }"
+    />
 
-              <div class="flex items-center justify-end gap-3 mt-6">
-                <button
-                  @click="closeDeleteModal"
-                  :disabled="isDeleting"
-                  type="button"
-                  class="inline-flex items-center rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  @click="confirmDelete"
-                  :disabled="isDeleting"
-                  type="button"
-                  class="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 disabled:pointer-events-none transition-colors"
-                >
-                  <Loader2 v-if="isDeleting" class="w-4 h-4 animate-spin" />
-                  O'chirish
-                </button>
-              </div>
-            </div>
-          </Transition>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- ================================================================= -->
+    <!-- Bulk delete confirmation modal                                    -->
+    <!-- ================================================================= -->
+    <ConfirmDialog
+      :open="isBulkDeleteModalOpen"
+      title="Savollarni ommaviy o'chirish"
+      :description="`${selectedCount} ta tanlangan savolni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.`"
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isBulkProcessing"
+      @confirm="confirmBulkDelete"
+      @cancel="isBulkDeleteModalOpen = false"
+      @update:open="(v: boolean) => { if (!v) isBulkDeleteModalOpen = false }"
+    />
   </div>
 </template>
 

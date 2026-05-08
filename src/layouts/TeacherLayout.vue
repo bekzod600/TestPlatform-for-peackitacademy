@@ -16,6 +16,7 @@ import {
   UsersRound,
   CalendarCheck,
   UserRound,
+  Flag,
 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
@@ -36,6 +37,7 @@ const navItems = [
   { path: '/teacher/tests', label: 'Testlar', icon: ClipboardList },
   { path: '/teacher/questions', label: 'Savollar', icon: FileQuestion },
   { path: '/teacher/results', label: 'Natijalar', icon: BarChart3 },
+  { path: '/teacher/complaints', label: 'Shikoyatlar', icon: Flag },
 ]
 
 function isActive(item: typeof navItems[0]) {

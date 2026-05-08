@@ -9,7 +9,7 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { SESSION } from '@/lib/constants'
+import { SESSION, ATTEMPT_STATUSES } from '@/lib/constants'
 import type { ActiveTestState, QuestionWithOptions, TestScoreResult } from '@/types'
 import type { AttemptStatus } from '@/lib/constants'
 import {
@@ -59,6 +59,12 @@ export const useStudentTestStore = defineStore('student-test', () => {
     return Math.round((answeredCount.value / totalQuestions.value) * 100)
   })
 
+  /** Count of flagged questions. */
+  const flaggedCount = computed<number>(() => {
+    if (!activeTest.value) return 0
+    return activeTest.value.flagged_questions.length
+  })
+
   // ---------------------------------------------------------
   // Storage Actions
   // ---------------------------------------------------------
@@ -71,6 +77,8 @@ export const useStudentTestStore = defineStore('student-test', () => {
     try {
       const parsed = JSON.parse(raw) as ActiveTestState
       if (parsed && parsed.attempt_id && parsed.is_active) {
+        // Backward compat: older states may lack flagged_questions
+        parsed.flagged_questions = parsed.flagged_questions ?? []
         activeTest.value = parsed
       }
     } catch {
@@ -133,6 +141,7 @@ export const useStudentTestStore = defineStore('student-test', () => {
         started_at: attempt.started_at,
         time_remaining_seconds: effectiveSettings.duration_minutes * 60,
         violation_count: attempt.violation_count,
+        flagged_questions: [],
       }
 
       saveToStorage()
@@ -200,6 +209,28 @@ export const useStudentTestStore = defineStore('student-test', () => {
   function prevQuestion(): void {
     if (!activeTest.value) return
     goToQuestion(activeTest.value.current_index - 1)
+  }
+
+  // ---------------------------------------------------------
+  // Flagging Actions
+  // ---------------------------------------------------------
+
+  /** Toggle flag status for a question. */
+  function toggleFlag(questionId: number): void {
+    if (!activeTest.value) return
+    const idx = activeTest.value.flagged_questions.indexOf(questionId)
+    if (idx === -1) {
+      activeTest.value.flagged_questions.push(questionId)
+    } else {
+      activeTest.value.flagged_questions.splice(idx, 1)
+    }
+    saveToStorage()
+  }
+
+  /** Check if a question is flagged. */
+  function isQuestionFlagged(questionId: number): boolean {
+    if (!activeTest.value) return false
+    return activeTest.value.flagged_questions.includes(questionId)
   }
 
   // ---------------------------------------------------------
@@ -288,6 +319,7 @@ export const useStudentTestStore = defineStore('student-test', () => {
     totalQuestions,
     answeredCount,
     progress,
+    flaggedCount,
 
     // Actions
     loadFromStorage,
@@ -297,6 +329,8 @@ export const useStudentTestStore = defineStore('student-test', () => {
     goToQuestion,
     nextQuestion,
     prevQuestion,
+    toggleFlag,
+    isQuestionFlagged,
     incrementViolation,
     finishTest,
     clearTest,

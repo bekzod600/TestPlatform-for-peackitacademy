@@ -31,3 +31,8 @@ CREATE INDEX idx_complaints_created_at ON question_complaints(created_at DESC);
 -- Prevent duplicate complaints for the same question in the same attempt
 CREATE UNIQUE INDEX idx_complaints_unique_per_attempt
     ON question_complaints(attempt_id, question_id);
+
+-- RLS
+ALTER TABLE question_complaints ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all access" ON question_complaints
+    FOR ALL USING (true) WITH CHECK (true);

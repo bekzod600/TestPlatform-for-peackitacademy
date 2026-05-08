@@ -9,7 +9,6 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  AlertTriangle,
 } from 'lucide-vue-next'
 import {
   fetchTests,
@@ -21,9 +20,14 @@ import {
   fetchQuestions,
   syncTestQuestions,
   fetchQuestionIdsForTest,
+  bulkDelete,
+  bulkToggleStatus,
 } from '@/api/admin.api'
+import BulkActionBar from '@/components/BulkActionBar.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import type { QuestionWithDetails } from '@/types'
 import { useAuthStore } from '@/stores/auth'
+import { useBulkSelection } from '@/composables/useBulkSelection'
 import { PAGINATION } from '@/lib/constants'
 import type {
   TestWithDetails,
@@ -40,10 +44,13 @@ import type {
 // ---------------------------------------------------------------
 
 const authStore = useAuthStore()
+const { selectedIds, selectedCount, hasSelection, toggleItem, toggleAll, isSelected, isAllSelected, isIndeterminate, deselectAll } = useBulkSelection<TestWithDetails>()
 const teachers = ref<SafeUser[]>([])
 const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
+const isBulkProcessing = ref(false)
+const isBulkDeleteModalOpen = ref(false)
 
 // Tests data & pagination
 const tests = ref<TestWithDetails[]>([])
@@ -398,6 +405,61 @@ async function confirmDelete() {
 }
 
 // ---------------------------------------------------------------
+// Bulk Operations
+// ---------------------------------------------------------------
+
+async function confirmBulkDelete() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkDelete('tests', [...selectedIds.value], 'test', authStore.user?.id ?? null)
+    if (result.success) {
+      successMessage.value = `${result.data!.deleted_count} ta test o'chirildi`
+      deselectAll()
+      await loadTests()
+    } else {
+      errorMessage.value = result.error ?? "Ommaviy o'chirishda xatolik"
+    }
+  } catch {
+    errorMessage.value = "Ommaviy o'chirishda xatolik yuz berdi"
+  } finally {
+    isBulkProcessing.value = false
+    isBulkDeleteModalOpen.value = false
+  }
+}
+
+async function handleBulkActivate() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkToggleStatus('tests', [...selectedIds.value], true, 'test', authStore.user?.id ?? null)
+    if (result.success) {
+      successMessage.value = `${result.data!.updated_count} ta test faollashtirildi`
+      deselectAll()
+      await loadTests()
+    } else {
+      errorMessage.value = result.error ?? 'Faollashtirishda xatolik'
+    }
+  } finally {
+    isBulkProcessing.value = false
+  }
+}
+
+async function handleBulkDeactivate() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkToggleStatus('tests', [...selectedIds.value], false, 'test', authStore.user?.id ?? null)
+    if (result.success) {
+      successMessage.value = `${result.data!.updated_count} ta test nofaollashtirildi`
+      deselectAll()
+      await loadTests()
+    } else {
+      errorMessage.value = result.error ?? 'Nofaollashtirishda xatolik'
+    }
+  } finally {
+    isBulkProcessing.value = false
+  }
+}
+
+// ---------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------
 
@@ -504,6 +566,19 @@ onMounted(async () => {
       />
     </div>
 
+    <!-- Bulk Action Bar -->
+    <BulkActionBar
+      v-if="hasSelection"
+      :selected-count="selectedCount"
+      entity-label="test"
+      :show-status-toggle="true"
+      :is-processing="isBulkProcessing"
+      @bulk-delete="isBulkDeleteModalOpen = true"
+      @bulk-activate="handleBulkActivate"
+      @bulk-deactivate="handleBulkDeactivate"
+      @clear-selection="deselectAll"
+    />
+
     <!-- Loading State -->
     <div v-if="isLoading" class="space-y-4">
       <div class="rounded-xl border border-border bg-card">
@@ -527,6 +602,11 @@ onMounted(async () => {
         <table class="w-full">
           <thead>
             <tr class="border-b border-border bg-muted/50">
+              <th class="w-12 px-3 py-3">
+                <div class="flex items-center justify-center">
+                  <input type="checkbox" :checked="isAllSelected(tests)" :indeterminate="isIndeterminate(tests)" class="h-4 w-4 rounded border-input text-primary focus:ring-ring" @change="toggleAll(tests)" />
+                </div>
+              </th>
               <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Nomi
               </th>
@@ -548,11 +628,12 @@ onMounted(async () => {
             </tr>
           </thead>
           <tbody class="divide-y divide-border">
-            <tr
-              v-for="test in tests"
-              :key="test.id"
-              class="hover:bg-muted/30 transition-colors"
-            >
+            <tr v-for="test in tests" :key="test.id" :class="['hover:bg-muted/30 transition-colors', isSelected(test.id) && 'bg-primary/5']">
+              <td class="w-12 px-3 py-4">
+                <div class="flex items-center justify-center">
+                  <input type="checkbox" :checked="isSelected(test.id)" class="h-4 w-4 rounded border-input text-primary focus:ring-ring" @change="toggleItem(test.id)" />
+                </div>
+              </td>
               <td class="whitespace-nowrap px-6 py-4">
                 <div class="flex flex-col">
                   <span class="text-sm font-medium text-foreground">{{ test.name }}</span>
@@ -605,7 +686,7 @@ onMounted(async () => {
 
             <!-- Empty State -->
             <tr v-if="tests.length === 0">
-              <td colspan="6" class="px-6 py-12 text-center">
+              <td colspan="7" class="px-6 py-12 text-center">
                 <p class="text-sm text-muted-foreground">Testlar topilmadi</p>
               </td>
             </tr>
@@ -876,76 +957,30 @@ onMounted(async () => {
       </Transition>
     </Teleport>
 
-    <!-- ============================================================= -->
-    <!-- Delete Confirmation Modal                                      -->
-    <!-- ============================================================= -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition ease-out duration-200"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition ease-in duration-150"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="isDeleteModalOpen"
-          class="fixed inset-0 z-50 flex items-center justify-center"
-        >
-          <!-- Overlay -->
-          <div
-            class="fixed inset-0 bg-black/50"
-            @click="closeDeleteModal"
-          />
+    <!-- Delete Confirmation Dialog -->
+    <ConfirmDialog
+      :open="isDeleteModalOpen"
+      title="Testni o'chirish"
+      :description="`${testToDelete?.name} testini o'chirishni xohlaysizmi? Bu amalni ortga qaytarib bo'lmaydi.`"
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isDeleting"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteModal"
+      @update:open="(v: boolean) => { if (!v) closeDeleteModal() }"
+    />
 
-          <!-- Modal -->
-          <Transition
-            enter-active-class="transition ease-out duration-200 transform"
-            enter-from-class="opacity-0 scale-95"
-            enter-to-class="opacity-100 scale-100"
-            leave-active-class="transition ease-in duration-150 transform"
-            leave-from-class="opacity-100 scale-100"
-            leave-to-class="opacity-0 scale-95"
-            appear
-          >
-            <div class="relative z-50 w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl">
-              <div class="flex items-start gap-4">
-                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10">
-                  <AlertTriangle class="h-5 w-5 text-destructive" />
-                </div>
-                <div>
-                  <h3 class="text-base font-semibold text-foreground">
-                    Testni o'chirish
-                  </h3>
-                  <p class="mt-2 text-sm text-muted-foreground">
-                    <strong class="text-foreground">{{ testToDelete?.name }}</strong>
-                    testini o'chirishni xohlaysizmi? Bu amalni ortga qaytarib bo'lmaydi.
-                  </p>
-                </div>
-              </div>
-
-              <div class="mt-6 flex items-center justify-end gap-3">
-                <button
-                  @click="closeDeleteModal"
-                  type="button"
-                  class="inline-flex items-center rounded-lg border border-input bg-background px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
-                >
-                  Bekor qilish
-                </button>
-                <button
-                  @click="confirmDelete"
-                  type="button"
-                  :disabled="isDeleting"
-                  class="inline-flex items-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:pointer-events-none"
-                >
-                  <Loader2 v-if="isDeleting" class="h-4 w-4 animate-spin" />
-                  O'chirish
-                </button>
-              </div>
-            </div>
-          </Transition>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- Bulk Delete Confirmation Dialog -->
+    <ConfirmDialog
+      :open="isBulkDeleteModalOpen"
+      title="Ommaviy o'chirish"
+      :description="`${selectedCount} ta testni o'chirishni xohlaysizmi? Bu amalni ortga qaytarib bo'lmaydi.`"
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isBulkProcessing"
+      @confirm="confirmBulkDelete"
+      @cancel="isBulkDeleteModalOpen = false"
+      @update:open="(v: boolean) => { if (!v) isBulkDeleteModalOpen = false }"
+    />
   </div>
 </template>

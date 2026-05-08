@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import {
   Flag,
   Search,
@@ -15,13 +16,18 @@ import {
   FileQuestion,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
+  Trash2,
 } from 'lucide-vue-next'
 import {
   fetchComplaints,
+  fetchComplaintsByTeacher,
   updateComplaint,
   deleteComplaint,
+  deleteQuestion,
 } from '@/api/admin.api'
 import type { ComplaintListFilters } from '@/api/admin.api'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/components/ui/toast/useToast'
 import {
@@ -32,8 +38,13 @@ import {
 import type { ComplaintStatus } from '@/lib/constants'
 import type { QuestionComplaintWithDetails } from '@/types'
 
+const router = useRouter()
+const route = useRoute()
 const { toast } = useToast()
 const authStore = useAuthStore()
+
+// Role detection
+const isTeacherView = computed(() => route.path.startsWith('/teacher'))
 
 // State
 const isLoading = ref(true)
@@ -52,10 +63,15 @@ const adminNote = ref('')
 const selectedStatus = ref<ComplaintStatus>(COMPLAINT_STATUSES.PENDING)
 const isSaving = ref(false)
 
-// Delete
+// Delete complaint
 const showDeleteModal = ref(false)
 const deletingComplaint = ref<QuestionComplaintWithDetails | null>(null)
 const isDeleting = ref(false)
+
+// Delete question
+const showDeleteQuestionModal = ref(false)
+const deletingQuestionId = ref<number | null>(null)
+const isDeletingQuestion = ref(false)
 
 // Computed
 const statusOptions = computed(() => [
@@ -85,7 +101,9 @@ async function loadComplaints() {
       filters.search = searchQuery.value.trim()
     }
 
-    const result = await fetchComplaints(filters)
+    const result = isTeacherView.value && authStore.user?.id
+      ? await fetchComplaintsByTeacher(authStore.user.id, filters)
+      : await fetchComplaints(filters)
     if (result.success) {
       complaints.value = result.data
       totalCount.value = result.pagination.total_count
@@ -155,6 +173,38 @@ async function handleDelete() {
     toast({ title: 'Xatolik', description: 'O\'chirishda xatolik', variant: 'destructive' })
   } finally {
     isDeleting.value = false
+  }
+}
+
+function navigateToQuestion(questionId: number) {
+  showDetailModal.value = false
+  const basePath = isTeacherView.value ? '/teacher/questions' : '/admin/questions'
+  router.push({ path: basePath, query: { search: String(questionId) } })
+}
+
+function confirmDeleteQuestion(questionId: number) {
+  deletingQuestionId.value = questionId
+  showDeleteQuestionModal.value = true
+}
+
+async function handleDeleteQuestion() {
+  if (!deletingQuestionId.value) return
+  isDeletingQuestion.value = true
+  try {
+    const result = await deleteQuestion(deletingQuestionId.value, authStore.user?.id)
+    if (result.success) {
+      toast({ title: 'Savol o\'chirildi', variant: 'success' })
+      showDeleteQuestionModal.value = false
+      showDetailModal.value = false
+      deletingQuestionId.value = null
+      await loadComplaints()
+    } else {
+      toast({ title: 'Xatolik', description: result.error ?? 'Savolni o\'chirishda xatolik', variant: 'destructive' })
+    }
+  } catch {
+    toast({ title: 'Xatolik', description: 'Savolni o\'chirishda xatolik', variant: 'destructive' })
+  } finally {
+    isDeletingQuestion.value = false
   }
 }
 
@@ -322,7 +372,7 @@ onMounted(loadComplaints)
 
           <!-- Admin note if exists -->
           <div v-if="complaint.admin_note" class="mb-3 p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-            <p class="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">Admin izohi:</p>
+            <p class="text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">{{ isTeacherView ? 'Izoh:' : 'Admin izohi:' }}</p>
             <p class="text-sm text-foreground">{{ complaint.admin_note }}</p>
           </div>
 
@@ -471,6 +521,23 @@ onMounted(loadComplaints)
                       </div>
                     </div>
                   </div>
+                  <!-- Question Actions -->
+                  <div class="flex items-center gap-2 mt-2">
+                    <button
+                      @click="navigateToQuestion(selectedComplaint!.question_id)"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-primary hover:bg-primary/10 transition-colors border border-primary/20"
+                    >
+                      <ExternalLink class="w-3.5 h-3.5" />
+                      Savolga o'tish
+                    </button>
+                    <button
+                      @click="confirmDeleteQuestion(selectedComplaint!.question_id)"
+                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-colors border border-red-500/20"
+                    >
+                      <Trash2 class="w-3.5 h-3.5" />
+                      Savolni o'chirish
+                    </button>
+                  </div>
                 </div>
 
                 <!-- Complaint Text -->
@@ -497,7 +564,7 @@ onMounted(loadComplaints)
 
                 <!-- Admin Actions -->
                 <div class="space-y-4">
-                  <h4 class="text-sm font-semibold text-foreground">Admin javob</h4>
+                  <h4 class="text-sm font-semibold text-foreground">{{ isTeacherView ? 'Javob' : 'Admin javob' }}</h4>
 
                   <!-- Status -->
                   <div class="space-y-1.5">
@@ -515,7 +582,7 @@ onMounted(loadComplaints)
 
                   <!-- Admin Note -->
                   <div class="space-y-1.5">
-                    <label class="text-sm font-medium text-foreground">Admin izohi</label>
+                    <label class="text-sm font-medium text-foreground">{{ isTeacherView ? 'Izoh' : 'Admin izohi' }}</label>
                     <textarea
                       v-model="adminNote"
                       placeholder="Izoh yozing (ixtiyoriy)..."
@@ -558,46 +625,28 @@ onMounted(loadComplaints)
       </Transition>
     </Teleport>
 
-    <!-- Delete Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition-all duration-200"
-        leave-active-class="transition-all duration-200"
-        enter-from-class="opacity-0"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showDeleteModal"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          @click.self="showDeleteModal = false"
-        >
-          <div class="w-full max-w-sm bg-background rounded-xl shadow-xl border border-border p-6">
-            <div class="flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 mx-auto mb-4">
-              <XCircle class="w-6 h-6 text-red-600 dark:text-red-400" />
-            </div>
-            <h3 class="text-lg font-semibold text-foreground text-center mb-1">Shikoyatni o'chirish</h3>
-            <p class="text-sm text-muted-foreground text-center mb-5">
-              Bu shikoyatni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi.
-            </p>
-            <div class="flex gap-3">
-              <button
-                @click="showDeleteModal = false"
-                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border border-border text-foreground hover:bg-accent transition-colors"
-              >
-                Bekor qilish
-              </button>
-              <button
-                @click="handleDelete"
-                :disabled="isDeleting"
-                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
-              >
-                <Loader2 v-if="isDeleting" class="w-4 h-4 animate-spin mx-auto" />
-                <span v-else>O'chirish</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <ConfirmDialog
+      :open="showDeleteModal"
+      title="Shikoyatni o'chirish"
+      description="Bu shikoyatni o'chirishni xohlaysizmi? Bu amalni qaytarib bo'lmaydi."
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isDeleting"
+      @confirm="handleDelete"
+      @cancel="showDeleteModal = false"
+      @update:open="(v: boolean) => { if (!v) showDeleteModal = false }"
+    />
+
+    <ConfirmDialog
+      :open="showDeleteQuestionModal"
+      title="Savolni o'chirish"
+      description="Bu savolni o'chirishni xohlaysizmi? Barcha javob variantlari va bog'liq shikoyatlar ham o'chiriladi. Bu amalni qaytarib bo'lmaydi."
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isDeletingQuestion"
+      @confirm="handleDeleteQuestion"
+      @cancel="showDeleteQuestionModal = false"
+      @update:open="(v: boolean) => { if (!v) showDeleteQuestionModal = false }"
+    />
   </div>
 </template>

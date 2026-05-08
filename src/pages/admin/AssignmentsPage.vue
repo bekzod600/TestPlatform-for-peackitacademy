@@ -16,9 +16,13 @@ import {
   createAssignment,
   updateAssignment,
   deleteAssignment,
+  bulkDelete,
   fetchTests,
   fetchUserGroups,
 } from '@/api/admin.api'
+import BulkActionBar from '@/components/BulkActionBar.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import { useBulkSelection } from '@/composables/useBulkSelection'
 import type {
   TestAssignmentWithDetails,
   TestAssignmentInsert,
@@ -37,6 +41,11 @@ const searchQuery = ref('')
 const showDeleteModal = ref(false)
 const deletingId = ref<number | null>(null)
 const isDeleting = ref(false)
+
+// Bulk selection
+const { selectedIds, selectedCount, hasSelection, toggleItem, isSelected, deselectAll } = useBulkSelection<TestAssignmentWithDetails>()
+const isBulkProcessing = ref(false)
+const isBulkDeleteModalOpen = ref(false)
 
 const form = ref({
   test_id: 0,
@@ -175,6 +184,24 @@ async function handleDelete() {
   }
 }
 
+async function confirmBulkDelete() {
+  isBulkProcessing.value = true
+  try {
+    const result = await bulkDelete('test_assignments', [...selectedIds.value], 'test_assignment')
+    if (result.success) {
+      deselectAll()
+      await loadData()
+    } else {
+      console.error("Ommaviy o'chirishda xatolik:", result.error)
+    }
+  } catch (err) {
+    console.error("Ommaviy o'chirishda xatolik yuz berdi:", err)
+  } finally {
+    isBulkProcessing.value = false
+    isBulkDeleteModalOpen.value = false
+  }
+}
+
 function getAssignmentStatus(a: TestAssignmentWithDetails) {
   const now = new Date()
   const start = new Date(a.start_time)
@@ -228,6 +255,17 @@ onMounted(loadData)
       />
     </div>
 
+    <!-- Bulk Action Bar -->
+    <BulkActionBar
+      v-if="hasSelection"
+      :selected-count="selectedCount"
+      entity-label="tayinlash"
+      :show-status-toggle="false"
+      :is-processing="isBulkProcessing"
+      @bulk-delete="isBulkDeleteModalOpen = true"
+      @clear-selection="deselectAll"
+    />
+
     <!-- Loading -->
     <div v-if="isLoading" class="space-y-3">
       <div v-for="i in 4" :key="i" class="h-20 bg-muted animate-pulse rounded-xl" />
@@ -246,10 +284,17 @@ onMounted(loadData)
       <div
         v-for="a in filtered"
         :key="a.id"
-        class="rounded-xl border border-border bg-card p-4"
+        :class="['rounded-xl border border-border bg-card p-4 transition-colors', isSelected(a.id) && 'ring-2 ring-primary/30 bg-primary/5']"
       >
         <div class="flex items-start justify-between gap-4">
-          <div class="min-w-0 flex-1">
+          <div class="flex items-start gap-3 min-w-0 flex-1">
+            <input
+              type="checkbox"
+              :checked="isSelected(a.id)"
+              class="h-4 w-4 mt-1 rounded border-input text-primary focus:ring-ring shrink-0 cursor-pointer"
+              @change="toggleItem(a.id)"
+            />
+            <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 mb-1">
               <p class="text-sm font-medium text-foreground truncate">{{ a.test?.name || 'Test' }}</p>
               <span :class="['px-2 py-0.5 rounded-full text-[10px] font-medium', getAssignmentStatus(a).class]">
@@ -273,6 +318,7 @@ onMounted(loadData)
               <span v-if="a.max_questions" class="inline-flex items-center rounded-md bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400">{{ a.max_questions }} savol</span>
               <span v-if="a.passing_score" class="inline-flex items-center rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">{{ a.passing_score }}%</span>
               <span v-if="a.max_attempts" class="inline-flex items-center rounded-md bg-green-500/10 px-1.5 py-0.5 text-[10px] font-medium text-green-600 dark:text-green-400">{{ a.max_attempts }} urinish</span>
+            </div>
             </div>
           </div>
           <div class="flex items-center gap-1 shrink-0">
@@ -471,44 +517,30 @@ onMounted(loadData)
       </Transition>
     </Teleport>
 
-    <!-- Delete Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition-opacity duration-200"
-        leave-active-class="transition-opacity duration-200"
-        enter-from-class="opacity-0"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showDeleteModal"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-          @click.self="showDeleteModal = false"
-        >
-          <div class="w-full max-w-sm bg-card rounded-xl shadow-xl border border-border p-6 text-center">
-            <div class="flex items-center justify-center w-12 h-12 rounded-full bg-destructive/10 mx-auto mb-4">
-              <Trash2 class="w-6 h-6 text-destructive" />
-            </div>
-            <h3 class="text-lg font-semibold text-foreground mb-2">Tayinlashni o'chirish</h3>
-            <p class="text-sm text-muted-foreground mb-4">Bu amalni qaytarib bo'lmaydi.</p>
-            <div class="flex gap-3">
-              <button
-                @click="showDeleteModal = false"
-                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
-              >
-                Bekor qilish
-              </button>
-              <button
-                @click="handleDelete"
-                :disabled="isDeleting"
-                class="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
-              >
-                <Loader2 v-if="isDeleting" class="w-4 h-4 animate-spin mx-auto" />
-                <span v-else>O'chirish</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- Delete Confirmation Dialog -->
+    <ConfirmDialog
+      :open="showDeleteModal"
+      title="Tayinlashni o'chirish"
+      description="Bu amalni qaytarib bo'lmaydi."
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isDeleting"
+      @confirm="handleDelete"
+      @cancel="showDeleteModal = false"
+      @update:open="(v: boolean) => { if (!v) showDeleteModal = false }"
+    />
+
+    <!-- Bulk Delete Confirmation Dialog -->
+    <ConfirmDialog
+      :open="isBulkDeleteModalOpen"
+      title="Ommaviy o'chirish"
+      :description="`${selectedCount} ta tayinlashni o'chirishni xohlaysizmi? Bu amalni ortga qaytarib bo'lmaydi.`"
+      confirm-label="O'chirish"
+      variant="destructive"
+      :loading="isBulkProcessing"
+      @confirm="confirmBulkDelete"
+      @cancel="isBulkDeleteModalOpen = false"
+      @update:open="(v: boolean) => { if (!v) isBulkDeleteModalOpen = false }"
+    />
   </div>
 </template>
