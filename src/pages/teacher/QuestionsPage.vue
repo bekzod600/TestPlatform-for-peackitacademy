@@ -30,6 +30,8 @@ import {
   updateOption,
   deleteOption,
   syncQuestionTests,
+  bulkImportQuestions,
+  type BulkQuestionImportItem,
 } from '@/api/admin.api'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/components/ui/toast/useToast'
@@ -624,6 +626,7 @@ async function handleFileImport(event: Event) {
     let imported = 0
     let skipped = 0
     const errors: string[] = []
+    const items: BulkQuestionImportItem[] = []
 
     for (const row of rows) {
       const questionText = String(row['Savol matni'] ?? '').trim()
@@ -709,28 +712,30 @@ async function handleFileImport(event: Event) {
         image_url: null,
       }
 
-      const res = await createQuestion(payload)
-      if (!res.success || !res.data) {
-        errors.push(`"${questionText.slice(0, 40)}..." — saqlashda xatolik`)
-        skipped++
-        continue
-      }
+      const options = variantTexts.map((text, i) => ({
+        option_text: text,
+        is_correct: correctIndexes.has(i),
+        sort_order: i,
+      }))
 
-      imported++
+      items.push({ question: payload, options, test_ids: resolvedTestIds })
+    }
 
-      const optionPromises = []
-      for (let i = 0; i < variantTexts.length; i++) {
-        optionPromises.push(createOption({
-          question_id: res.data.id,
-          option_text: variantTexts[i],
-          is_correct: correctIndexes.has(i),
-          sort_order: i,
-        }))
+    // Barcha savollarni bitta partiyada saqlash
+    if (items.length > 0) {
+      const result = await bulkImportQuestions(items, auth.user?.id ?? null)
+      imported = result.data?.imported_count ?? 0
+      if (!result.success) {
+        toast({
+          title: 'Import xatosi',
+          description: imported > 0
+            ? `${imported} ta savol saqlandi, so'ng xatolik: ${result.error}`
+            : (result.error ?? "Savollarni saqlashda xatolik"),
+          variant: 'destructive',
+        })
+        await loadQuestions()
+        return
       }
-      if (resolvedTestIds.length > 0) {
-        optionPromises.push(syncQuestionTests(res.data.id, resolvedTestIds))
-      }
-      await Promise.all(optionPromises)
     }
 
     if (imported > 0) {

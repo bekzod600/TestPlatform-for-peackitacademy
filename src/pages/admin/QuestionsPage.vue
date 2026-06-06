@@ -34,6 +34,8 @@ import {
   syncQuestionTests,
   bulkDelete,
   bulkToggleStatus,
+  bulkImportQuestions,
+  type BulkQuestionImportItem,
 } from '@/api/admin.api'
 import BulkActionBar from '@/components/BulkActionBar.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -770,6 +772,7 @@ async function handleFileImport(event: Event) {
     let imported = 0
     let skipped = 0
     const errors: string[] = []
+    const items: BulkQuestionImportItem[] = []
 
     for (const row of rows) {
       // --- 1. Savol matni (majburiy) ---
@@ -848,7 +851,7 @@ async function handleFileImport(event: Event) {
         }
       }
 
-      // --- 6. Savol yaratish ---
+      // --- 6. Savolni import ro'yxatiga qo'shish (hozircha saqlanmaydi) ---
       const payload: QuestionInsert = {
         question_text: questionText,
         question_type: QUESTION_TYPES.MULTIPLE_CHOICE,
@@ -861,29 +864,30 @@ async function handleFileImport(event: Event) {
         image_url: null,
       }
 
-      const res = await createQuestion(payload)
-      if (!res.success || !res.data) {
-        errors.push(`"${questionText.slice(0, 40)}..." — saqlashda xatolik`)
-        skipped++
-        continue
-      }
+      const options = variantTexts.map((text, i) => ({
+        option_text: text,
+        is_correct: correctIndexes.has(i),
+        sort_order: i,
+      }))
 
-      imported++
+      items.push({ question: payload, options, test_ids: resolvedTestIds })
+    }
 
-      // --- 7. Variantlarni saqlash + test bog'lanishlarni yaratish ---
-      const optionPromises = []
-      for (let i = 0; i < variantTexts.length; i++) {
-        optionPromises.push(createOption({
-          question_id: res.data.id,
-          option_text: variantTexts[i],
-          is_correct: correctIndexes.has(i),
-          sort_order: i,
-        }))
+    // --- 7. Barcha savollarni bitta partiyada saqlash ---
+    if (items.length > 0) {
+      const result = await bulkImportQuestions(items, auth.user?.id ?? null)
+      imported = result.data?.imported_count ?? 0
+      if (!result.success) {
+        toast({
+          title: 'Import xatosi',
+          description: imported > 0
+            ? `${imported} ta savol saqlandi, so'ng xatolik: ${result.error}`
+            : (result.error ?? "Savollarni saqlashda xatolik"),
+          variant: 'destructive',
+        })
+        await loadQuestions()
+        return
       }
-      if (resolvedTestIds.length > 0) {
-        optionPromises.push(syncQuestionTests(res.data.id, resolvedTestIds))
-      }
-      await Promise.all(optionPromises)
     }
 
     // --- Natija xabari ---

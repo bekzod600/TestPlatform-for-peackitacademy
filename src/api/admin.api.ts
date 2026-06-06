@@ -1331,6 +1331,114 @@ export async function bulkToggleStatus(
 }
 
 // =============================================================
+// BULK QUESTION IMPORT (Excel)
+// =============================================================
+
+/** One parsed question ready for bulk import. */
+export interface BulkQuestionImportItem {
+  question: QuestionInsert
+  /** Answer options without question_id — it is filled in after insert. */
+  options: Array<Omit<AnswerOptionInsert, 'question_id'>>
+  /** Test IDs this question should be linked to. */
+  test_ids: number[]
+}
+
+/**
+ * Import many questions at once.
+ *
+ * Instead of inserting each question (and each of its options) with a
+ * separate round-trip, this batches the work: per chunk it runs
+ *   1) one INSERT for all questions,
+ *   2) one INSERT for all their answer options,
+ *   3) one INSERT for all their test links.
+ * For an N-question file this turns thousands of requests into a handful,
+ * which is dramatically faster for large Excel uploads.
+ *
+ * Index mapping is safe because PostgreSQL returns rows from a multi-row
+ * INSERT in the same order they were supplied.
+ */
+export async function bulkImportQuestions(
+  items: BulkQuestionImportItem[],
+  actorId?: number | null,
+): Promise<ApiResponse<{ imported_count: number }>> {
+  if (items.length === 0) {
+    return { data: { imported_count: 0 }, error: null, success: true }
+  }
+
+  // Keep each request a reasonable size by splitting into chunks.
+  const CHUNK_SIZE = 100
+  let imported = 0
+
+  try {
+    for (let start = 0; start < items.length; start += CHUNK_SIZE) {
+      const chunk = items.slice(start, start + CHUNK_SIZE)
+
+      // 1) Insert all questions in this chunk with a single request.
+      const { data: insertedQuestions, error: qErr } = await supabase
+        .from('questions')
+        .insert(chunk.map((it) => it.question))
+        .select('id')
+
+      if (qErr) {
+        return { data: { imported_count: imported }, error: qErr.message, success: false }
+      }
+      if (!insertedQuestions || insertedQuestions.length !== chunk.length) {
+        return {
+          data: { imported_count: imported },
+          error: 'Saqlangan savollar soni mos kelmadi',
+          success: false,
+        }
+      }
+
+      // 2) Build option + test-link rows referencing the new question IDs.
+      const optionRows: AnswerOptionInsert[] = []
+      const linkRows: Array<{ test_id: number; question_id: number; sort_order: number }> = []
+
+      chunk.forEach((it, idx) => {
+        const questionId = (insertedQuestions[idx] as { id: number }).id
+        for (const opt of it.options) {
+          optionRows.push({ ...opt, question_id: questionId })
+        }
+        it.test_ids.forEach((tid, linkIdx) => {
+          linkRows.push({ test_id: tid, question_id: questionId, sort_order: linkIdx })
+        })
+      })
+
+      // 3) Insert all answer options in one request.
+      if (optionRows.length > 0) {
+        const { error: oErr } = await supabase.from('answer_options').insert(optionRows)
+        if (oErr) {
+          return { data: { imported_count: imported }, error: oErr.message, success: false }
+        }
+      }
+
+      // 4) Insert all test links in one request.
+      if (linkRows.length > 0) {
+        const { error: lErr } = await supabase.from('test_questions').insert(linkRows)
+        if (lErr) {
+          return { data: { imported_count: imported }, error: lErr.message, success: false }
+        }
+      }
+
+      imported += chunk.length
+    }
+
+    // Single aggregate audit entry (not one per question).
+    await logAudit({
+      user_id: actorId,
+      action: 'create',
+      entity_type: 'question',
+      new_data: { bulk_import: true, count: imported },
+    })
+
+    return { data: { imported_count: imported }, error: null, success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Ommaviy import xatosi'
+    return { data: { imported_count: imported }, error: message, success: false }
+  }
+}
+
+// =============================================================
 // PER-QUESTION ANALYTICS
 // =============================================================
 
