@@ -1,17 +1,5 @@
-<script setup lang="ts">
-import { type HTMLAttributes } from 'vue'
-import {
-  DialogClose,
-  DialogContent as DialogContentPrimitive,
-  type DialogContentEmits,
-  type DialogContentProps,
-  DialogOverlay,
-  DialogPortal,
-  useForwardPropsEmits,
-} from 'radix-vue'
+<script lang="ts">
 import { type VariantProps, cva } from 'class-variance-authority'
-import { X } from 'lucide-vue-next'
-import { cn } from '@/lib/utils'
 
 export const sheetVariants = cva(
   'fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out',
@@ -30,7 +18,22 @@ export const sheetVariants = cva(
   },
 )
 
-type SheetVariants = VariantProps<typeof sheetVariants>
+export type SheetVariants = VariantProps<typeof sheetVariants>
+</script>
+
+<script setup lang="ts">
+import { type HTMLAttributes } from 'vue'
+import {
+  DialogClose,
+  DialogContent as DialogContentPrimitive,
+  type DialogContentEmits,
+  type DialogContentProps,
+  DialogOverlay,
+  DialogPortal,
+  useForwardPropsEmits,
+} from 'radix-vue'
+import { X } from 'lucide-vue-next'
+import { cn } from '@/lib/utils'
 
 interface Props extends DialogContentProps {
   class?: HTMLAttributes['class']

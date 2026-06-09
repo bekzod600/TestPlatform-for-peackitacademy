@@ -85,11 +85,16 @@ export function useTestSecurity(onViolation?: (type: ViolationType, tabSwitchCou
     }
   }
 
-  /** Prevents the right-click context menu. */
+  /**
+   * Prevents the right-click context menu.
+   *
+   * Right-click is treated as a harmless convenience block, NOT a cheating
+   * attempt: it only suppresses the native menu and never records a
+   * violation or counts toward test termination.
+   */
   function handleContextMenu(e: Event): void {
     if (ANTI_CHEAT.DISABLE_CONTEXT_MENU) {
       e.preventDefault()
-      recordViolation('context_menu')
     }
   }
 

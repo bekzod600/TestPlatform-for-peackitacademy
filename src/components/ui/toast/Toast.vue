@@ -1,8 +1,5 @@
-<script setup lang="ts">
-import { type HTMLAttributes } from 'vue'
+<script lang="ts">
 import { type VariantProps, cva } from 'class-variance-authority'
-import { X } from 'lucide-vue-next'
-import { cn } from '@/lib/utils'
 
 export const toastVariants = cva(
   'group pointer-events-auto relative flex w-full items-center justify-between space-x-2 overflow-hidden rounded-md border p-4 pr-6 shadow-lg transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-80 data-[state=open]:slide-in-from-top-full data-[state=open]:sm:slide-in-from-bottom-full',
@@ -20,7 +17,13 @@ export const toastVariants = cva(
   },
 )
 
-type ToastVariants = VariantProps<typeof toastVariants>
+export type ToastVariants = VariantProps<typeof toastVariants>
+</script>
+
+<script setup lang="ts">
+import { type HTMLAttributes } from 'vue'
+import { X } from 'lucide-vue-next'
+import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   id: string

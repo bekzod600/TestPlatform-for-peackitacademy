@@ -967,6 +967,102 @@ export async function deleteGroupAsTeacher(
   return result
 }
 
+/**
+ * Fetch students (role = student) belonging to a set of group IDs.
+ * Used by the teacher students page for group-based filtering.
+ */
+export async function fetchStudentsByGroups(
+  groupIds: number[],
+  search?: string,
+): Promise<ApiResponse<UserWithGroup[]>> {
+  if (groupIds.length === 0) {
+    return { data: [], error: null, success: true }
+  }
+
+  let q = supabase
+    .from('users')
+    .select('*, user_group:user_groups!users_user_group_fkey(*)')
+    .eq('role', 'student')
+    .in('user_group_id', groupIds)
+    .order('full_name', { ascending: true })
+
+  if (search && search.trim()) {
+    const s = sanitizeSearch(search.trim())
+    q = q.or(`full_name.ilike.%${s}%,username.ilike.%${s}%`)
+  }
+
+  const { data, error } = await q
+  if (error) return { data: null, error: error.message, success: false }
+  return { data: (data ?? []) as UserWithGroup[], error: null, success: true }
+}
+
+/** Aggregate statistics for one or more groups (students + their attempts). */
+export interface GroupStatistics {
+  student_count: number
+  active_student_count: number
+  attempts_count: number
+  students_attempted: number
+  avg_percentage: number
+  best_percentage: number
+}
+
+/**
+ * Compute aggregate statistics for the given group IDs:
+ * student counts plus average / best results over finished attempts.
+ */
+export async function fetchGroupStatistics(
+  groupIds: number[],
+): Promise<ApiResponse<GroupStatistics>> {
+  const empty: GroupStatistics = {
+    student_count: 0,
+    active_student_count: 0,
+    attempts_count: 0,
+    students_attempted: 0,
+    avg_percentage: 0,
+    best_percentage: 0,
+  }
+  if (groupIds.length === 0) return { data: empty, error: null, success: true }
+
+  // 1. Students in these groups
+  const { data: students, error: sErr } = await supabase
+    .from('users')
+    .select('id, is_active')
+    .eq('role', 'student')
+    .in('user_group_id', groupIds)
+  if (sErr) return { data: null, error: sErr.message, success: false }
+
+  const studentRows = students ?? []
+  const studentIds = studentRows.map((s: { id: number }) => s.id)
+  const stats: GroupStatistics = {
+    ...empty,
+    student_count: studentIds.length,
+    active_student_count: studentRows.filter((s: { is_active: boolean }) => s.is_active).length,
+  }
+  if (studentIds.length === 0) return { data: stats, error: null, success: true }
+
+  // 2. Finished attempts for those students
+  const { data: attempts, error: aErr } = await supabase
+    .from('test_attempts')
+    .select('user_id, percentage')
+    .in('user_id', studentIds)
+    .in('status', ['completed', 'timed_out', 'violation'])
+  if (aErr) return { data: null, error: aErr.message, success: false }
+
+  const finished = attempts ?? []
+  stats.attempts_count = finished.length
+  stats.students_attempted = new Set(
+    finished.map((a: { user_id: number }) => a.user_id),
+  ).size
+
+  const pcts = finished.map((a: { percentage: number | null }) => a.percentage ?? 0)
+  if (pcts.length > 0) {
+    stats.avg_percentage = Math.round(pcts.reduce((sum: number, p: number) => sum + p, 0) / pcts.length)
+    stats.best_percentage = Math.round(Math.max(...pcts))
+  }
+
+  return { data: stats, error: null, success: true }
+}
+
 /** Fetch paginated assignments for the teacher's own groups. */
 export async function fetchAssignmentsByTeacher(
   teacherId: number,

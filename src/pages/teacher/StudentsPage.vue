@@ -7,64 +7,58 @@ import {
   Trash2,
   X,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   AlertTriangle,
   Download,
+  Users,
+  UserCheck,
+  ClipboardList,
+  BarChart3,
+  Trophy,
 } from 'lucide-vue-next'
 import { exportToExcel } from '@/composables/useExcel'
 import type { ExcelColumn } from '@/composables/useExcel'
 import {
-  fetchUsers,
   createUser,
   updateUser,
   deleteUser,
-  fetchUserGroups,
+  fetchGroupsByTeacher,
+  fetchStudentsByGroups,
+  fetchGroupStatistics,
 } from '@/api/admin.api'
-import { USER_ROLES, PAGINATION } from '@/lib/constants'
+import type { GroupStatistics } from '@/api/admin.api'
+import { USER_ROLES } from '@/lib/constants'
+import { useAuthStore } from '@/stores/auth'
 import ImageUploader from '@/components/ImageUploader.vue'
 import { useImageUpload, IMAGE_BUCKETS } from '@/composables/useImageUpload'
-
-const { uploadImage, deleteImage, replaceImage, isUploading: isImageUploading, uploadError: imageUploadError } = useImageUpload()
 import type {
   UserWithGroup,
-  UserGroup,
+  UserGroupWithTeacher,
   UserInsert,
   UserUpdate,
-  UserListFilters,
-  PaginatedResponse,
 } from '@/types'
+
+const { uploadImage, deleteImage, replaceImage, isUploading: isImageUploading, uploadError: imageUploadError } = useImageUpload()
+
+const auth = useAuthStore()
+const teacherId = computed(() => auth.user?.id as number)
 
 // ---------------------------------------------------------------
 // State
 // ---------------------------------------------------------------
 
 const isLoading = ref(true)
+const isStatsLoading = ref(false)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 
-const users = ref<UserWithGroup[]>([])
-const pagination = ref({
-  page: 1,
-  page_size: PAGINATION.DEFAULT_PAGE_SIZE as number,
-  total_count: 0,
-  total_pages: 0,
-  has_next: false,
-  has_previous: false,
-})
+const groups = ref<UserGroupWithTeacher[]>([])
+/** null = barcha guruhlar */
+const selectedGroupId = ref<number | null>(null)
+
+const students = ref<UserWithGroup[]>([])
+const stats = ref<GroupStatistics | null>(null)
 
 const searchQuery = ref('')
-let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
-
-const filters = reactive<UserListFilters>({
-  search: '',
-  page: 1,
-  page_size: PAGINATION.DEFAULT_PAGE_SIZE,
-  sort_by: 'created_at',
-  sort_order: 'desc',
-})
-
-const userGroups = ref<UserGroup[]>([])
 
 const isSheetOpen = ref(false)
 const editingUser = ref<UserWithGroup | null>(null)
@@ -94,44 +88,52 @@ const successMessage = ref('')
 // Computed
 // ---------------------------------------------------------------
 
-// Faqat studentlarni ko'rsatamiz
-const filteredUsers = computed(() =>
-  users.value.filter((u) => u.role === USER_ROLES.STUDENT),
+/** Tanlangan guruh(lar)ning ID lari — null bo'lsa barcha guruhlar */
+const activeGroupIds = computed<number[]>(() =>
+  selectedGroupId.value !== null
+    ? [selectedGroupId.value]
+    : groups.value.map((g) => g.id),
 )
 
-const paginationRange = computed(() => {
-  const current = pagination.value.page
-  const total = pagination.value.total_pages
-  const pages: (number | string)[] = []
+const selectedGroup = computed(() =>
+  groups.value.find((g) => g.id === selectedGroupId.value) ?? null,
+)
 
-  if (total <= 7) {
-    for (let i = 1; i <= total; i++) pages.push(i)
-  } else {
-    pages.push(1)
-    if (current > 3) pages.push('...')
-    const start = Math.max(2, current - 1)
-    const end = Math.min(total - 1, current + 1)
-    for (let i = start; i <= end; i++) pages.push(i)
-    if (current < total - 2) pages.push('...')
-    pages.push(total)
-  }
-
-  return pages
+const filteredStudents = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return students.value
+  return students.value.filter(
+    (s) =>
+      s.full_name?.toLowerCase().includes(q) ||
+      s.username?.toLowerCase().includes(q),
+  )
 })
 
 // ---------------------------------------------------------------
 // API Calls
 // ---------------------------------------------------------------
 
-async function loadUsers() {
+async function loadGroups() {
+  try {
+    const result = await fetchGroupsByTeacher(teacherId.value)
+    if (result.success && result.data) {
+      groups.value = result.data
+    } else {
+      errorMessage.value = result.error ?? 'Guruhlarni yuklashda xatolik'
+    }
+  } catch (err) {
+    console.error('Failed to load groups:', err)
+    errorMessage.value = 'Guruhlarni yuklashda xatolik'
+  }
+}
+
+async function loadStudents() {
   isLoading.value = true
   errorMessage.value = ''
-
   try {
-    const result: PaginatedResponse<UserWithGroup> = await fetchUsers(filters)
-    if (result.success) {
-      users.value = result.data
-      pagination.value = result.pagination
+    const result = await fetchStudentsByGroups(activeGroupIds.value)
+    if (result.success && result.data) {
+      students.value = result.data
     } else {
       errorMessage.value = result.error ?? "O'quvchilarni yuklashda xatolik yuz berdi"
     }
@@ -143,39 +145,33 @@ async function loadUsers() {
   }
 }
 
-async function loadUserGroups() {
+async function loadStats() {
+  isStatsLoading.value = true
   try {
-    const result = await fetchUserGroups()
+    const result = await fetchGroupStatistics(activeGroupIds.value)
     if (result.success && result.data) {
-      userGroups.value = result.data
+      stats.value = result.data
     }
   } catch (err) {
-    console.error('Failed to load user groups:', err)
+    console.error('Failed to load group statistics:', err)
+  } finally {
+    isStatsLoading.value = false
   }
 }
 
-// ---------------------------------------------------------------
-// Search
-// ---------------------------------------------------------------
-
-function onSearchInput() {
-  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
-  searchDebounceTimer = setTimeout(() => {
-    filters.search = searchQuery.value
-    filters.page = 1
-    loadUsers()
-  }, 300)
+async function refresh() {
+  await Promise.all([loadStudents(), loadStats()])
 }
 
-// ---------------------------------------------------------------
-// Pagination
-// ---------------------------------------------------------------
-
-function goToPage(page: number) {
-  if (page < 1 || page > pagination.value.total_pages) return
-  filters.page = page
-  loadUsers()
+function selectGroup(groupId: number | null) {
+  if (selectedGroupId.value === groupId) return
+  selectedGroupId.value = groupId
 }
+
+watch(selectedGroupId, () => {
+  searchQuery.value = ''
+  refresh()
+})
 
 // ---------------------------------------------------------------
 // Sheet (slide-over)
@@ -184,6 +180,10 @@ function goToPage(page: number) {
 function openCreateSheet() {
   editingUser.value = null
   resetForm()
+  // Tanlangan guruhni avtomatik tanlash
+  if (selectedGroupId.value !== null) {
+    form.user_group_id = selectedGroupId.value
+  }
   isSheetOpen.value = true
 }
 
@@ -278,7 +278,6 @@ async function handleSubmit() {
 
   try {
     if (isEditing.value && editingUser.value) {
-      // --- Avatar upload / removal ---
       let avatarUrl = editingUser.value.avatar_url ?? null
       if (pendingAvatarFile.value) {
         const newUrl = await replaceImage(
@@ -308,11 +307,11 @@ async function handleSubmit() {
         payload.password_hash = form.password_hash
       }
 
-      const result = await updateUser(editingUser.value.id, payload)
+      const result = await updateUser(editingUser.value.id, payload, teacherId.value)
       if (result.success) {
         successMessage.value = "O'quvchi muvaffaqiyatli yangilandi"
         closeSheet()
-        await loadUsers()
+        await refresh()
       } else {
         errorMessage.value = result.error ?? "O'quvchini yangilashda xatolik yuz berdi"
       }
@@ -327,7 +326,7 @@ async function handleSubmit() {
         avatar_url: null,
       }
 
-      const result = await createUser(payload)
+      const result = await createUser(payload, teacherId.value)
       if (!result.success || !result.data) {
         errorMessage.value = result.error ?? "O'quvchi qo'shishda xatolik yuz berdi"
         return
@@ -346,7 +345,7 @@ async function handleSubmit() {
 
       successMessage.value = "O'quvchi muvaffaqiyatli qo'shildi"
       closeSheet()
-      await loadUsers()
+      await refresh()
     }
   } catch (err) {
     errorMessage.value = 'Kutilmagan xatolik yuz berdi'
@@ -378,16 +377,15 @@ async function confirmDelete() {
   successMessage.value = ''
 
   try {
-    // Storage dan avatarni o'chirish
     if (userToDelete.value.avatar_url) {
       await deleteImage(userToDelete.value.avatar_url, IMAGE_BUCKETS.AVATARS)
     }
 
-    const result = await deleteUser(userToDelete.value.id)
+    const result = await deleteUser(userToDelete.value.id, teacherId.value)
     if (result.success) {
       successMessage.value = "O'quvchi muvaffaqiyatli o'chirildi"
       closeDeleteModal()
-      await loadUsers()
+      await refresh()
     } else {
       errorMessage.value = result.error ?? "O'quvchini o'chirishda xatolik yuz berdi"
     }
@@ -434,10 +432,10 @@ async function exportStudents() {
       transform: (v) => new Date(v as string).toLocaleDateString('uz-UZ'),
     },
   ]
-  await exportToExcel(filteredUsers.value, columns, 'oquvchilar')
+  const fileName = selectedGroup.value ? `oquvchilar-${selectedGroup.value.name}` : 'oquvchilar'
+  await exportToExcel(filteredStudents.value, columns, fileName)
 }
 
-// Auto-dismiss success messages after 3 seconds
 watch(successMessage, (val) => {
   if (val) {
     setTimeout(() => {
@@ -451,7 +449,8 @@ watch(successMessage, (val) => {
 // ---------------------------------------------------------------
 
 onMounted(async () => {
-  await Promise.all([loadUsers(), loadUserGroups()])
+  await loadGroups()
+  await refresh()
 })
 </script>
 
@@ -502,13 +501,13 @@ onMounted(async () => {
       <div>
         <h1 class="text-2xl font-bold text-foreground">O'quvchilar</h1>
         <p class="mt-1 text-sm text-muted-foreground">
-          O'quvchilarni boshqaring
+          Guruhlaringiz o'quvchilarini boshqaring
         </p>
       </div>
       <div class="flex items-center gap-2">
         <button
           @click="exportStudents"
-          :disabled="!filteredUsers.length"
+          :disabled="!filteredStudents.length"
           class="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50 disabled:pointer-events-none"
         >
           <Download class="h-4 w-4" />
@@ -516,11 +515,98 @@ onMounted(async () => {
         </button>
         <button
           @click="openCreateSheet"
-          class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          :disabled="!groups.length"
+          class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:pointer-events-none"
         >
           <Plus class="h-4 w-4" />
           Qo'shish
         </button>
+      </div>
+    </div>
+
+    <!-- Group Filter Chips -->
+    <div class="flex flex-wrap gap-2">
+      <button
+        @click="selectGroup(null)"
+        :class="[
+          'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+          selectedGroupId === null
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-border bg-card text-foreground hover:bg-accent',
+        ]"
+      >
+        <Users class="h-3.5 w-3.5" />
+        Barcha guruhlar
+      </button>
+      <button
+        v-for="group in groups"
+        :key="group.id"
+        @click="selectGroup(group.id)"
+        :class="[
+          'inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors',
+          selectedGroupId === group.id
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-border bg-card text-foreground hover:bg-accent',
+        ]"
+      >
+        {{ group.name }}
+      </button>
+      <p v-if="!groups.length" class="text-sm text-muted-foreground py-1.5">
+        Hozircha guruhlaringiz yo'q. Avval "Guruhlarim" sahifasida guruh qo'shing.
+      </p>
+    </div>
+
+    <!-- Statistics -->
+    <div>
+      <h2 class="mb-2 text-sm font-medium text-muted-foreground">
+        {{ selectedGroup ? `"${selectedGroup.name}" guruhi statistikasi` : 'Umumiy statistika' }}
+      </h2>
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-2 text-muted-foreground">
+            <Users class="h-4 w-4" />
+            <span class="text-xs">O'quvchilar</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-foreground">
+            {{ isStatsLoading ? '—' : (stats?.student_count ?? 0) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-2 text-muted-foreground">
+            <UserCheck class="h-4 w-4" />
+            <span class="text-xs">Faol</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-foreground">
+            {{ isStatsLoading ? '—' : (stats?.active_student_count ?? 0) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-2 text-muted-foreground">
+            <ClipboardList class="h-4 w-4" />
+            <span class="text-xs">Urinishlar</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-foreground">
+            {{ isStatsLoading ? '—' : (stats?.attempts_count ?? 0) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-2 text-muted-foreground">
+            <BarChart3 class="h-4 w-4" />
+            <span class="text-xs">O'rtacha natija</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-foreground">
+            {{ isStatsLoading ? '—' : `${stats?.avg_percentage ?? 0}%` }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-border bg-card p-4">
+          <div class="flex items-center gap-2 text-muted-foreground">
+            <Trophy class="h-4 w-4" />
+            <span class="text-xs">Eng yaxshi</span>
+          </div>
+          <p class="mt-2 text-2xl font-bold text-foreground">
+            {{ isStatsLoading ? '—' : `${stats?.best_percentage ?? 0}%` }}
+          </p>
+        </div>
       </div>
     </div>
 
@@ -529,7 +615,6 @@ onMounted(async () => {
       <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <input
         v-model="searchQuery"
-        @input="onSearchInput"
         type="text"
         placeholder="Ism yoki foydalanuvchi nomi bo'yicha qidirish..."
         class="flex h-10 w-full rounded-lg border border-input bg-background pl-10 pr-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -576,7 +661,7 @@ onMounted(async () => {
           </thead>
           <tbody class="divide-y divide-border">
             <tr
-              v-for="user in filteredUsers"
+              v-for="user in filteredStudents"
               :key="user.id"
               class="hover:bg-muted/30 transition-colors"
             >
@@ -635,7 +720,7 @@ onMounted(async () => {
             </tr>
 
             <!-- Empty State -->
-            <tr v-if="filteredUsers.length === 0">
+            <tr v-if="filteredStudents.length === 0">
               <td colspan="5" class="px-6 py-12 text-center">
                 <p class="text-sm text-muted-foreground">O'quvchilar topilmadi</p>
               </td>
@@ -644,47 +729,14 @@ onMounted(async () => {
         </table>
       </div>
 
-      <!-- Pagination -->
+      <!-- Footer count -->
       <div
-        v-if="pagination.total_pages > 1"
+        v-if="filteredStudents.length"
         class="flex items-center justify-between border-t border-border px-6 py-4"
       >
         <p class="text-sm text-muted-foreground">
-          Jami <span class="font-medium text-foreground">{{ filteredUsers.length }}</span> ta o'quvchi
+          Jami <span class="font-medium text-foreground">{{ filteredStudents.length }}</span> ta o'quvchi
         </p>
-        <div class="flex items-center gap-1">
-          <button
-            @click="goToPage(pagination.page - 1)"
-            :disabled="!pagination.has_previous"
-            class="inline-flex items-center justify-center rounded-lg p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <ChevronLeft class="h-4 w-4" />
-          </button>
-
-          <template v-for="(p, idx) in paginationRange" :key="idx">
-            <span v-if="p === '...'" class="px-2 text-sm text-muted-foreground">...</span>
-            <button
-              v-else
-              @click="goToPage(p as number)"
-              :class="[
-                'inline-flex h-8 w-8 items-center justify-center rounded-lg text-sm transition-colors',
-                pagination.page === p
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              ]"
-            >
-              {{ p }}
-            </button>
-          </template>
-
-          <button
-            @click="goToPage(pagination.page + 1)"
-            :disabled="!pagination.has_next"
-            class="inline-flex items-center justify-center rounded-lg p-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50 disabled:pointer-events-none"
-          >
-            <ChevronRight class="h-4 w-4" />
-          </button>
-        </div>
       </div>
     </div>
 
@@ -808,7 +860,7 @@ onMounted(async () => {
                     >
                       <option :value="null" disabled>Guruhni tanlang</option>
                       <option
-                        v-for="group in userGroups"
+                        v-for="group in groups"
                         :key="group.id"
                         :value="group.id"
                       >

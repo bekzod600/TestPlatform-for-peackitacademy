@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   Send,
   Loader2,
-  ShieldAlert,
   Eye,
   ClipboardList,
   Flag,
@@ -22,6 +21,7 @@ import { useStudentTestStore } from '@/stores/student/test'
 import { useTimer } from '@/composables/useTimer'
 import { useTestSecurity } from '@/composables/useTestSecurity'
 import { useConnectionStatus } from '@/composables/useConnectionStatus'
+import { useToast } from '@/components/ui/toast'
 import { ANTI_CHEAT, ATTEMPT_STATUSES } from '@/lib/constants'
 import type { AttemptStatus } from '@/lib/constants'
 import { submitQuestionComplaint } from '@/api/student.api'
@@ -34,10 +34,8 @@ const testStore = useStudentTestStore()
 const isLoading = ref(true)
 const showFinishModal = ref(false)
 
-// Violation modal state
-const showViolationModal = ref(false)
-const violationMessage = ref('')
-const isTestTerminated = ref(false)
+// Non-blocking toast notifications (violation warnings, etc.)
+const { toast } = useToast()
 
 // Complaint state
 const showComplaintModal = ref(false)
@@ -72,25 +70,61 @@ const timer = useTimer(0, () => {
   handleFinishTest(ATTEMPT_STATUSES.TIMED_OUT, 'time_expired')
 })
 
-// Initialize security — only tab switches count toward the 3-strike termination
+/** Human-readable warning text for each non-fatal violation type. */
+const VIOLATION_MESSAGES: Partial<Record<string, string>> = {
+  copy: 'Nusxa olish (copy) test paytida taqiqlangan.',
+  cut: 'Kesib olish (cut) test paytida taqiqlangan.',
+  paste: 'Joylashtirish (paste) test paytida taqiqlangan.',
+  devtools: 'Developer Tools ochish taqiqlangan.',
+  screenshot: 'Skrinshot olish taqiqlangan.',
+}
+
+// Initialize security.
+// - Right-click (context menu) is silently blocked and never reaches here:
+//   it does NOT count and shows no warning.
+// - Every other violation increments the stored count and shows a toast.
+// - Only tab/window switches count toward the 3-strike termination.
 const security = useTestSecurity((type, tabCount) => {
-  // Always update store violation count for any violation type
+  // Record the violation against the attempt (for teacher/admin review).
   testStore.incrementViolation()
 
-  // Only tab/window switches trigger the modal warning and 3-strike rule
   if (type === 'tab_switch') {
     if (tabCount >= ANTI_CHEAT.MAX_TAB_SWITCHES) {
-      violationMessage.value = `Siz ${ANTI_CHEAT.MAX_TAB_SWITCHES} marta boshqa oynaga o'tdingiz. Test bekor qilindi!`
-      isTestTerminated.value = true
-      showViolationModal.value = true
-      handleFinishTest(ATTEMPT_STATUSES.VIOLATION, 'Maximum tab switches exceeded')
+      // Limit reached → terminate the attempt and return to the dashboard.
+      terminateForViolation(`${ANTI_CHEAT.MAX_TAB_SWITCHES} marta boshqa oynaga o'tildi`)
     } else {
-      violationMessage.value = `Ogohlantirish! Siz boshqa oynaga o'tdingiz (${tabCount}/${ANTI_CHEAT.MAX_TAB_SWITCHES}). Yana ${ANTI_CHEAT.MAX_TAB_SWITCHES - tabCount} marta qoldi.`
-      isTestTerminated.value = false
-      showViolationModal.value = true
+      toast({
+        variant: 'destructive',
+        title: 'Ogohlantirish',
+        description: `Boshqa oynaga o'tdingiz (${tabCount}/${ANTI_CHEAT.MAX_TAB_SWITCHES}). Yana ${ANTI_CHEAT.MAX_TAB_SWITCHES - tabCount} marta o'tsangiz, testdan chiqarib yuborilasiz.`,
+      })
     }
+    return
   }
+
+  // Non-fatal violations (copy/cut/paste/devtools/screenshot): warn only.
+  toast({
+    variant: 'destructive',
+    title: 'Taqiqlangan amal',
+    description: VIOLATION_MESSAGES[type] ?? 'Qoidabuzarlik aniqlandi.',
+  })
 })
+
+/**
+ * Finish the test because the student broke a rule, then send them to the
+ * dashboard with an explanatory toast. The toast survives navigation because
+ * the Toaster is mounted globally in App.vue.
+ */
+async function terminateForViolation(reason: string) {
+  if (testStore.isFinishing) return
+  await handleFinishTest(ATTEMPT_STATUSES.VIOLATION, reason)
+  toast({
+    variant: 'destructive',
+    title: 'Test bekor qilindi',
+    description: `Qoida buzilgani uchun test yakunlandi: ${reason}.`,
+    duration: 8000,
+  })
+}
 
 // Computed from store
 const currentQuestion = computed(() => testStore.currentQuestion)
@@ -133,10 +167,15 @@ async function handleFinishTest(status: AttemptStatus = ATTEMPT_STATUSES.COMPLET
     console.error('Error finishing test:', err)
   }
 
-  // Always clear test state and navigate to results, even if API failed.
+  // Always clear test state, even if the API call failed.
   // clearTest() ensures isActive becomes false so the router guard won't block.
   testStore.clearTest()
-  await router.push('/student/results')
+
+  // Rule violations send the student back to the dashboard; normal/timed-out
+  // completions go to the results page.
+  const destination =
+    status === ATTEMPT_STATUSES.VIOLATION ? '/student/dashboard' : '/student/results'
+  await router.push(destination)
 }
 
 // Complaint functions
@@ -183,7 +222,7 @@ async function handleSubmitComplaint() {
 
 // Keyboard shortcuts
 const isAnyModalOpen = computed(() =>
-  showFinishModal.value || showViolationModal.value || showComplaintModal.value
+  showFinishModal.value || showComplaintModal.value
 )
 
 function handleKeyboardShortcuts(e: KeyboardEvent) {
@@ -631,40 +670,6 @@ onUnmounted(() => {
       </Transition>
     </Teleport>
 
-    <!-- Violation Warning Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition-opacity duration-200"
-        leave-active-class="transition-opacity duration-200"
-        enter-from-class="opacity-0"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showViolationModal"
-          class="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-        >
-          <div class="w-full max-w-sm bg-card rounded-xl shadow-xl border border-destructive/30 animate-scale-in p-6 text-center">
-            <div class="flex items-center justify-center w-14 h-14 rounded-full bg-destructive/10 mx-auto mb-4">
-              <ShieldAlert class="w-7 h-7 text-destructive" />
-            </div>
-            <h3 class="text-lg font-bold text-destructive mb-3">Xavfsizlik ogohlantirishlari</h3>
-            <p class="text-sm text-foreground mb-6 leading-relaxed">
-              {{ violationMessage }}
-            </p>
-            <button
-              v-if="!isTestTerminated"
-              @click="showViolationModal = false"
-              class="w-full px-4 py-2.5 rounded-lg text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-            >
-              Tushundim, davom etaman
-            </button>
-            <p v-else class="text-xs text-muted-foreground">
-              Test yakunlandi. Siz natijalar sahifasiga yo'naltirilmoqdasiz...
-            </p>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
     <!-- Complaint Modal -->
     <Teleport to="body">

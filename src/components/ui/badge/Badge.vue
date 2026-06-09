@@ -1,7 +1,5 @@
-<script setup lang="ts">
-import { type HTMLAttributes } from 'vue'
+<script lang="ts">
 import { type VariantProps, cva } from 'class-variance-authority'
-import { cn } from '@/lib/utils'
 
 export const badgeVariants = cva(
   'inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
@@ -22,7 +20,12 @@ export const badgeVariants = cva(
   },
 )
 
-type BadgeVariants = VariantProps<typeof badgeVariants>
+export type BadgeVariants = VariantProps<typeof badgeVariants>
+</script>
+
+<script setup lang="ts">
+import { type HTMLAttributes } from 'vue'
+import { cn } from '@/lib/utils'
 
 const props = defineProps<{
   variant?: BadgeVariants['variant']

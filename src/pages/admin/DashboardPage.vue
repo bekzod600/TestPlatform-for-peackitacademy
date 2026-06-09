@@ -9,6 +9,10 @@ import {
   BarChart3,
   CalendarCheck,
   TrendingUp,
+  GraduationCap,
+  UserCog,
+  Target,
+  Trophy,
 } from 'lucide-vue-next'
 import { supabase } from '@/api/client'
 import {
@@ -48,6 +52,8 @@ const stats = ref({
   tests: 0,
   assignments: 0,
   attempts: 0,
+  students: 0,
+  teachers: 0,
 })
 
 const recentUsers = ref<Record<string, unknown>[]>([])
@@ -66,6 +72,8 @@ async function loadDashboard() {
       { count: testsCount },
       { count: assignmentsCount },
       { count: attemptsCount },
+      { count: studentsCount },
+      { count: teachersCount },
       { data: users },
       { data: attempts },
       { data: chartAttempts },
@@ -76,13 +84,15 @@ async function loadDashboard() {
       supabase.from('tests').select('*', { count: 'exact', head: true }),
       supabase.from('test_assignments').select('*', { count: 'exact', head: true }),
       supabase.from('test_attempts').select('*', { count: 'exact', head: true }),
+      supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'student'),
+      supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'teacher'),
       supabase.from('users').select('id, full_name, username, role, created_at').order('created_at', { ascending: false }).limit(5),
       supabase.from('test_attempts').select('*, test:tests(name), user:users(full_name)').order('created_at', { ascending: false }).limit(5),
       supabase.from('test_attempts')
-        .select('id, percentage, status, started_at, user_id, user:users(full_name, user_group_id, user_group:user_groups(name))')
+        .select('id, percentage, status, started_at, user_id, user:users(full_name, user_group_id, user_group:user_groups(name)), test:tests(passing_score)')
         .in('status', ['completed', 'timed_out', 'violation'])
         .order('started_at', { ascending: true })
-        .limit(500),
+        .limit(2000),
     ])
 
     stats.value = {
@@ -92,6 +102,8 @@ async function loadDashboard() {
       tests: testsCount ?? 0,
       assignments: assignmentsCount ?? 0,
       attempts: attemptsCount ?? 0,
+      students: studentsCount ?? 0,
+      teachers: teachersCount ?? 0,
     }
 
     recentUsers.value = users ?? []
@@ -209,6 +221,59 @@ const weeklyTrendData = computed(() => {
   }
 })
 
+// ----- Analytics KPIs -----
+const avgScore = computed(() => {
+  if (!allAttempts.value.length) return 0
+  const sum = allAttempts.value.reduce((s, a) => s + Number(a.percentage ?? 0), 0)
+  return Math.round(sum / allAttempts.value.length)
+})
+
+const passRate = computed(() => {
+  if (!allAttempts.value.length) return 0
+  const passed = allAttempts.value.filter((a) => {
+    const test = a.test as Record<string, unknown> | null
+    const threshold = Number(test?.passing_score ?? 60)
+    return Number(a.percentage ?? 0) >= threshold
+  }).length
+  return Math.round((passed / allAttempts.value.length) * 100)
+})
+
+const analyticsCards = computed(() => [
+  { key: 'students', label: "O'quvchilar", value: stats.value.students, icon: GraduationCap, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-500/10' },
+  { key: 'teachers', label: "O'qituvchilar", value: stats.value.teachers, icon: UserCog, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-500/10' },
+  { key: 'avg', label: "O'rtacha natija", value: `${avgScore.value}%`, icon: Target, color: 'text-cyan-600 dark:text-cyan-400', bg: 'bg-cyan-500/10' },
+  { key: 'pass', label: "O'tish foizi", value: `${passRate.value}%`, icon: CalendarCheck, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10' },
+])
+
+const topStudents = computed(() => {
+  const map = new Map<number, { name: string; group: string; sum: number; count: number }>()
+  for (const a of allAttempts.value) {
+    const user = a.user as Record<string, unknown> | null
+    const uid = Number(a.user_id)
+    if (!uid) continue
+    const group = user?.user_group as Record<string, unknown> | null
+    const pct = Number(a.percentage ?? 0)
+    const e = map.get(uid)
+    if (e) { e.sum += pct; e.count++ }
+    else map.set(uid, {
+      name: (user?.full_name as string) ?? 'Student',
+      group: (group?.name as string) ?? '—',
+      sum: pct,
+      count: 1,
+    })
+  }
+  return Array.from(map.values())
+    .map((s) => ({ ...s, avg: Math.round(s.sum / s.count) }))
+    .sort((a, b) => b.avg - a.avg)
+    .slice(0, 5)
+})
+
+function getScoreColor(pct: number) {
+  if (pct >= 80) return 'text-green-600 dark:text-green-400'
+  if (pct >= 60) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
 const doughnutOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -300,6 +365,25 @@ onMounted(loadDashboard)
         </button>
       </div>
 
+      <!-- Analytics KPI strip -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div
+          v-for="card in analyticsCards"
+          :key="card.key"
+          class="rounded-xl border border-border bg-card p-4"
+        >
+          <div class="flex items-center gap-3">
+            <div :class="['flex items-center justify-center w-10 h-10 rounded-lg shrink-0', card.bg]">
+              <component :is="card.icon" :class="['w-5 h-5', card.color]" />
+            </div>
+            <div>
+              <p class="text-2xl font-bold text-foreground">{{ card.value }}</p>
+              <p class="text-xs text-muted-foreground">{{ card.label }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Charts Row -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Score Distribution (Doughnut) -->
@@ -353,6 +437,48 @@ onMounted(loadDashboard)
             <div v-else class="flex items-center justify-center h-full text-sm text-muted-foreground">
               Ma'lumot yo'q
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top Students -->
+      <div class="rounded-xl border border-border bg-card">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 class="font-semibold text-foreground flex items-center gap-2">
+            <Trophy class="w-4 h-4 text-yellow-500" />
+            Eng yaxshi o'quvchilar
+          </h3>
+          <button @click="router.push('/admin/results')" class="text-sm text-primary hover:underline">
+            Natijalar
+          </button>
+        </div>
+        <div class="divide-y divide-border">
+          <div
+            v-for="(s, idx) in topStudents"
+            :key="idx"
+            class="flex items-center justify-between px-6 py-3"
+          >
+            <div class="flex items-center gap-3 min-w-0">
+              <div
+                :class="[
+                  'flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold shrink-0',
+                  idx === 0 ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
+                    : idx === 1 ? 'bg-slate-400/15 text-slate-500 dark:text-slate-300'
+                    : idx === 2 ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400'
+                    : 'bg-muted text-muted-foreground',
+                ]"
+              >
+                {{ idx + 1 }}
+              </div>
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-foreground truncate">{{ s.name }}</p>
+                <p class="text-xs text-muted-foreground truncate">{{ s.group }} · {{ s.count }} urinish</p>
+              </div>
+            </div>
+            <span :class="['text-sm font-bold shrink-0', getScoreColor(s.avg)]">{{ s.avg }}%</span>
+          </div>
+          <div v-if="!topStudents.length" class="px-6 py-8 text-center text-sm text-muted-foreground">
+            Hozircha natijalar yo'q
           </div>
         </div>
       </div>
