@@ -89,7 +89,7 @@ async function loadDashboard() {
       supabase.from('users').select('id, full_name, username, role, created_at').order('created_at', { ascending: false }).limit(5),
       supabase.from('test_attempts').select('*, test:tests(name), user:users(full_name)').order('created_at', { ascending: false }).limit(5),
       supabase.from('test_attempts')
-        .select('id, percentage, status, started_at, user_id, user:users(full_name, user_group_id, user_group:user_groups(name)), test:tests(passing_score)')
+        .select('id, percentage, status, started_at, user_id, user:users(full_name, user_group_id, user_group:user_groups!users_user_group_fkey(name)), test:tests(passing_score)')
         .in('status', ['completed', 'timed_out', 'violation'])
         .order('started_at', { ascending: true })
         .limit(2000),

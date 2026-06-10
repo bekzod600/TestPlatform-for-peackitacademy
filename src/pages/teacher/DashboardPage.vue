@@ -104,7 +104,7 @@ async function loadDashboard() {
         ? supabase
             .from('test_attempts')
             .select(
-              'id, percentage, status, started_at, user_id, test_id, user:users(full_name, user_group_id, user_group:user_groups(name)), test:tests(name, passing_score)',
+              'id, percentage, status, started_at, user_id, test_id, user:users(full_name, user_group_id, user_group:user_groups!users_user_group_fkey(name)), test:tests(name, passing_score)',
             )
             .in('test_id', myTestIds)
             .in('status', FINISHED)
