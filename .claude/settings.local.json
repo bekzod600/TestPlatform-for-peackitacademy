@@ -10,7 +10,29 @@
       "Bash(npm run build:*)",
       "Bash(git push:*)",
       "Bash(powershell:*)",
-      "WebFetch(domain:qarperzcpkvcybuoymnq.supabase.co)"
+      "WebFetch(domain:qarperzcpkvcybuoymnq.supabase.co)",
+      "Bash(git log *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(git pull *)",
+      "Bash(gh --version)",
+      "Bash(netlify --version)",
+      "Bash(vercel --version)",
+      "Bash(git rm *)",
+      "PowerShell(npx vue-tsc -b --force 2>&1 | Select-Object -First 30; \"EXIT: $LASTEXITCODE\")",
+      "Bash(command -v gh)",
+      "Bash(curl -s -D - -o /tmp/live_index.html https://exam.peakit.uz/)",
+      "Bash(git add *)",
+      "Bash(Select-String -Pattern \"recordViolation\\\\\\('context_menu'\\\\\\)|never records\")",
+      "Bash(Select-String -Pattern \"Toaster\")",
+      "Bash(Select-String -Pattern \"terminateForViolation|useToast\")",
+      "Bash(curl -s https://exam.peakit.uz/?cb=__TRACKED_VAR__)",
+      "Bash(git commit -m '@ *)",
+      "Bash(git commit *)",
+      "Bash(curl -s https://api.github.com/repos/bekzod600/TestPlatform-for-peackitacademy/commits/d35cfc5/status)",
+      "Bash(curl -s -D - -o /tmp/li.html https://exam.peakit.uz/?nocache=__TRACKED_VAR____TRACKED_VAR__)",
+      "Read(//c/tmp/**)",
+      "Bash(curl -s \"https://exam.peakit.uz/assets/index-DgWnfQCX.js\" -o bundle.js)",
+      "Bash(curl -s https://exam.peakit.uz/?x=__TRACKED_VAR__)"
     ]
   }
 }
